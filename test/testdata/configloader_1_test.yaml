@@ -1,19 +1,19 @@
 plugin_definitions:
 - name: test1
-  plugin: test-one
+  plugin_name: test-one
   parameters:
     threshold: 10
 profile_picker:
   plugin: 
-    plugin: test-profile-picker
+    plugin_name: test-profile-picker
 scheduler_profiles:
 - name: default
   plugins:
   - reference: test1
   - plugin:
-      plugin: test-two
+      plugin_name: test-two
       parameters:
         hash-block-size: 32
     weight: 50
   - plugin:
-      plugin: test-picker
+      plugin_name: test-picker

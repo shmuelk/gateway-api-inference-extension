@@ -106,35 +106,35 @@ func TestLoadSchedulerConfig(t *testing.T) {
 const successConfigText = `
 plugin_definitions:
 - name: lowQueue
-  plugin: low-queue
+  plugin_name: low-queue
   parameters:
     threshold: 10
 profile_picker:
   plugin:
-    plugin: all-profiles
+    plugin_name: all-profiles
 scheduler_profiles:
 - name: default
   plugins:
   - reference: lowQueue
   - plugin:
-      plugin: prefix-cache
+      plugin_name: prefix-cache
       parameters:
         hash-block-size: 32
     weight: 50
   - plugin:
-      plugin: max-score
+      plugin_name: max-score
 `
 
 //nolint:dupword
 const errorBadPluginJsonText = `
 profile_picker:
   plugin:
-    plugin: all-profiles
+    plugin_name: all-profiles
 scheduler_profiles:
 - name: default
   plugins:
   - plugin:
-      plugin: prefix-cache
+      plugin_name: prefix-cache
       parameters:
         hash-block-size: asdf
     weight: 50
@@ -144,26 +144,26 @@ scheduler_profiles:
 const errorBadPluginNoWeightText = `
 profile_picker:
   plugin:
-    plugin: all-profiles
+    plugin_name: all-profiles
 scheduler_profiles:
 - name: default
   plugins:
   - plugin:
-      plugin: prefix-cache
+      plugin_name: prefix-cache
       parameters:
         hash-block-size: 32
 `
 
 //nolint:dupword
 const errorBadReferenceNoWeightText = `
-profile_picker:
-  plugin:
-    plugin: all-profiles
 plugin_definitions:
 - name: prefix
-  plugin: prefix-cache
+  plugin_name: prefix-cache
   parameters:
     hash-block-size: 32
+profile_picker:
+  plugin:
+    plugin_name: all-profiles
 scheduler_profiles:
 - name: default
   plugins:
@@ -174,12 +174,12 @@ scheduler_profiles:
 const errorPluginReferenceJsonText = `
 plugin_definitions:
 - name: lowQueue
-  plugin: low-queue
+  plugin_name: low-queue
   parameters:
     threshold: qwer
 profile_picker:
   plugin:
-    plugin: all-profiles
+    plugin_name: all-profiles
 scheduler_profiles:
 - name: default
   plugins:
@@ -190,21 +190,21 @@ scheduler_profiles:
 const errorTwoPickersText = `
 profile_picker:
   plugin:
-    plugin: all-profiles
+    plugin_name: all-profiles
 scheduler_profiles:
 - name: default
   plugins:
   - plugin:
-      plugin: max-score
+      plugin_name: max-score
   - plugin:
-      plugin: random
+      plugin_name: random
 `
 
 //nolint:dupword
 const errorConfigText = `
 plugin_definitions:
 - name: lowQueue
-  plugin: low-queue
+  plugin_name: low-queue
   parameters:
     threshold: 10
 `

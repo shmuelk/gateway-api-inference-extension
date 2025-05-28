@@ -68,7 +68,7 @@ func LoadSchedulerConfig(theConfig *config.Config,
 					if plugin.Reference != nil {
 						name = *plugin.Reference
 					} else {
-						name = plugin.Plugin.Plugin
+						name = plugin.Plugin.PluginName
 					}
 					err = fmt.Errorf("scorer %s is missing a weight", name)
 					log.Error(err, "failed to instantiate scheduler profile")
@@ -92,7 +92,7 @@ func LoadSchedulerConfig(theConfig *config.Config,
 		pluginName = *theConfig.ProfilePicker.Reference
 		thePlugin = references[pluginName]
 	} else {
-		pluginName = theConfig.ProfilePicker.Plugin.Plugin
+		pluginName = theConfig.ProfilePicker.Plugin.PluginName
 		thePlugin, err = config.InstantiatePlugin(*theConfig.ProfilePicker.Plugin, log)
 		if err != nil {
 			return nil, err

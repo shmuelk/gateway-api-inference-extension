@@ -44,14 +44,14 @@ func TestLoadConfiguration(t *testing.T) {
 			{
 				Name: "test1",
 				BaseConfigPluginDefinition: BaseConfigPluginDefinition{
-					Plugin:     test1Name,
+					PluginName: test1Name,
 					Parameters: json.RawMessage("{\"threshold\":10}"),
 				},
 			},
 		},
 		ProfilePicker: BaseConfigProfilePlugin{
 			Plugin: &BaseConfigPluginDefinition{
-				Plugin: testProfilePicker,
+				PluginName: testProfilePicker,
 			},
 		},
 		SchedulerProfiles: []ConfigSchedulerProfile{
@@ -66,7 +66,7 @@ func TestLoadConfiguration(t *testing.T) {
 					{
 						BaseConfigProfilePlugin: BaseConfigProfilePlugin{
 							Plugin: &BaseConfigPluginDefinition{
-								Plugin:     test2Name,
+								PluginName: test2Name,
 								Parameters: json.RawMessage("{\"hash-block-size\":32}"),
 							},
 						},
@@ -75,7 +75,7 @@ func TestLoadConfiguration(t *testing.T) {
 					{
 						BaseConfigProfilePlugin: BaseConfigProfilePlugin{
 							Plugin: &BaseConfigPluginDefinition{
-								Plugin: testPickerName,
+								PluginName: testPickerName,
 							},
 						},
 					},
@@ -224,7 +224,7 @@ func TestLoadPluginReferences(t *testing.T) {
 func TestInstantiatePlugin(t *testing.T) {
 	log := logutil.NewTestLogger()
 
-	plugReference := BaseConfigPluginDefinition{Plugin: "plover"}
+	plugReference := BaseConfigPluginDefinition{PluginName: "plover"}
 	_, err := InstantiatePlugin(plugReference, log)
 	if err == nil {
 		t.Fatalf("InstantiatePlugin did not return the expected error")
@@ -237,23 +237,23 @@ func TestInstantiatePlugin(t *testing.T) {
 const successConfigText = `
 plugin_definitions:
 - name: test1
-  plugin: test-one
+  plugin_name: test-one
   parameters:
     threshold: 10
 profile_picker:
   plugin: 
-    plugin: test-profile-picker
+    plugin_name: test-profile-picker
 scheduler_profiles:
 - name: default
   plugins:
   - reference: test1
   - plugin:
-      plugin: test-two
+      plugin_name: test-two
       parameters:
         hash-block-size: 32
     weight: 50
   - plugin:
-      plugin: test-picker
+      plugin_name: test-picker
 `
 
 //nolint:dupword
@@ -272,17 +272,17 @@ plugin_definitions:
 const errorBadPluginReferencePluginText = `
 plugin_definitions:
 - name: testx
-  plugin: test-x
+  plugin_name: test-x
 profile_picker:
   plugin: 
-    plugin: test-profile-picker
+    plugin_name: test-profile-picker
 `
 
 //nolint:dupword
 const errorNoProfilePickerText = `
 plugin_definitions:
 - name: test1
-  plugin: test-one
+  plugin_name: test-one
   parameters:
     threshold: 10
 scheduler_profiles:
@@ -293,38 +293,38 @@ scheduler_profiles:
 const errorNoProfilesText = `
 plugin_definitions:
 - name: test1
-  plugin: test-one
+  plugin_name: test-one
   parameters:
     threshold: 10
 profile_picker:
   plugin: 
-    plugin: test-profile-picker
+    plugin_name: test-profile-picker
 `
 
 //nolint:dupword
 const errorNoProfileNameText = `
 plugin_definitions:
 - name: test1
-  plugin: test-one
+  plugin_name: test-one
   parameters:
     threshold: 10
 profile_picker:
   plugin: 
-    plugin: test-profile-picker
+    plugin_name: test-profile-picker
 scheduler_profiles:
 - test: x
 `
 
 //nolint:dupword
 const errorNoProfilePluginsText = `
-profile_picker:
-  plugin: 
-    plugin: test-profile-picker
 plugin_definitions:
 - name: test1
-  plugin: test-one
+  plugin_name: test-one
   parameters:
     threshold: 10
+profile_picker:
+  plugin: 
+    plugin_name: test-profile-picker
 scheduler_profiles:
 - name: default
 `
@@ -333,7 +333,7 @@ scheduler_profiles:
 const errorBadProfilePluginText = `
 profile_picker:
   plugin: 
-    plugin: test-profile-picker
+    plugin_name: test-profile-picker
 scheduler_profiles:
 - name: default
   plugins:
@@ -344,7 +344,7 @@ scheduler_profiles:
 const errorBadProfilePluginRefText = `
 profile_picker:
   plugin: 
-    plugin: test-profile-picker
+    plugin_name: test-profile-picker
 scheduler_profiles:
 - name: default
   plugins:
@@ -355,24 +355,24 @@ scheduler_profiles:
 const errorBadProfilePluginNameText = `
 profile_picker:
   plugin: 
-    plugin: test-profile-picker
+    plugin_name: test-profile-picker
 scheduler_profiles:
 - name: default
   plugins:
   - plugin:
-      plugin: plover
+      plugin_name: plover
 `
 
 //nolint:dupword
 const errorBadPluginReferenceParametersText = `
 plugin_definitions:
 - name: test1
-  plugin: test-one
+  plugin_name: test-one
   parameters:
     threshold: asdf
 profile_picker:
   plugin: 
-    plugin: test-profile-picker
+    plugin_name: test-profile-picker
 scheduler_profiles:
 - name: default
   plugins:

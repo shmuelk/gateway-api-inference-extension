@@ -34,7 +34,7 @@ type Config struct {
 }
 
 type BaseConfigPluginDefinition struct {
-	Plugin     string          `json:"plugin"`
+	PluginName string          `json:"plugin_name"`
 	Parameters json.RawMessage `json:"parameters"`
 }
 
@@ -98,15 +98,15 @@ func LoadPluginReferences(theConfig *Config, log logr.Logger) (map[string]framew
 }
 
 func InstantiatePlugin(pluginDefinition BaseConfigPluginDefinition, log logr.Logger) (framework.Plugin, error) {
-	factory, ok := framework.Registry[pluginDefinition.Plugin]
+	factory, ok := framework.Registry[pluginDefinition.PluginName]
 	if !ok {
-		err := fmt.Errorf("plugin %s not found", pluginDefinition.Plugin)
+		err := fmt.Errorf("plugin %s not found", pluginDefinition.PluginName)
 		log.Error(err, "failed to instantiate plugin")
 		return nil, err
 	}
 	thePlugin, err := factory(pluginDefinition.Parameters)
 	if err != nil {
-		log.Error(err, "failed to instantiate the plugin", "plugin", pluginDefinition.Plugin)
+		log.Error(err, "failed to instantiate the plugin", "plugin", pluginDefinition.PluginName)
 		return nil, err
 	}
 	return thePlugin, err
@@ -114,12 +114,12 @@ func InstantiatePlugin(pluginDefinition BaseConfigPluginDefinition, log logr.Log
 
 func validateConfiguration(theConfig *Config) error {
 	for _, pluginDefinition := range theConfig.PluginDefinitions {
-		if pluginDefinition.Name == "" || pluginDefinition.Plugin == "" {
+		if pluginDefinition.Name == "" || pluginDefinition.PluginName == "" {
 			return errors.New("plugin reference definition missing name or plugin reference")
 		}
-		_, ok := framework.Registry[pluginDefinition.Plugin]
+		_, ok := framework.Registry[pluginDefinition.PluginName]
 		if !ok {
-			return fmt.Errorf("plugin %s is not found", pluginDefinition.Plugin)
+			return fmt.Errorf("plugin %s is not found", pluginDefinition.PluginName)
 		}
 	}
 
@@ -154,9 +154,9 @@ func validateConfiguration(theConfig *Config) error {
 					return errors.New(*plugin.Reference + " is a reference to an undefined PluginDefinition")
 				}
 			} else {
-				_, ok := framework.Registry[plugin.Plugin.Plugin]
+				_, ok := framework.Registry[plugin.Plugin.PluginName]
 				if !ok {
-					return fmt.Errorf("plugin %s is not found", plugin.Plugin.Plugin)
+					return fmt.Errorf("plugin %s is not found", plugin.Plugin.PluginName)
 				}
 			}
 		}
