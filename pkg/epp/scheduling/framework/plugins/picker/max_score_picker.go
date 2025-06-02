@@ -17,9 +17,11 @@ limitations under the License.
 package picker
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/scheduling/framework"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/scheduling/types"
 	logutil "sigs.k8s.io/gateway-api-inference-extension/pkg/epp/util/logging"
@@ -56,8 +58,8 @@ func (p *MaxScorePicker) Name() string {
 }
 
 // Pick selects the pod with the maximum score from the list of candidates.
-func (p *MaxScorePicker) Pick(ctx *types.SchedulingContext, scoredPods []*types.ScoredPod) *types.Result {
-	ctx.Logger.V(logutil.DEBUG).Info(fmt.Sprintf("Selecting a pod with the max score from %d candidates: %+v", len(scoredPods), scoredPods))
+func (p *MaxScorePicker) Pick(ctx context.Context, cycleState *types.CycleState, scoredPods []*types.ScoredPod) *types.Result {
+	log.FromContext(ctx).V(logutil.DEBUG).Info(fmt.Sprintf("Selecting a pod with the max score from %d candidates: %+v", len(scoredPods), scoredPods))
 
 	highestScorePods := []*types.ScoredPod{}
 	maxScore := -1.0 // pods min score is 0, putting value lower than 0 in order to find at least one pod as highest
@@ -71,7 +73,7 @@ func (p *MaxScorePicker) Pick(ctx *types.SchedulingContext, scoredPods []*types.
 	}
 
 	if len(highestScorePods) > 1 {
-		return p.random.Pick(ctx, highestScorePods) // pick randomly from the highest score pods
+		return p.random.Pick(ctx, cycleState, highestScorePods) // pick randomly from the highest score pods
 	}
 
 	return &types.Result{TargetPod: highestScorePods[0]}

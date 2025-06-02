@@ -17,9 +17,11 @@ limitations under the License.
 package filter
 
 import (
+	"context"
 	"encoding/json"
 
 	"sigs.k8s.io/controller-runtime/pkg/log"
+
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/scheduling/config"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/scheduling/framework"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/scheduling/types"
@@ -70,7 +72,7 @@ func (f *LowQueueFilter) Name() string {
 }
 
 // Filter filters out pods that doesn't meet the filter criteria.
-func (f *LowQueueFilter) Filter(ctx *types.SchedulingContext, pods []types.Pod) []types.Pod {
+func (f *LowQueueFilter) Filter(_ context.Context, _ *types.LLMRequest, _ *types.CycleState, pods []types.Pod) []types.Pod {
 	filteredPods := []types.Pod{}
 
 	for _, pod := range pods {

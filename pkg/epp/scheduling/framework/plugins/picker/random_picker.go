@@ -17,10 +17,12 @@ limitations under the License.
 package picker
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math/rand"
 
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/scheduling/framework"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/scheduling/types"
 	logutil "sigs.k8s.io/gateway-api-inference-extension/pkg/epp/util/logging"
@@ -53,8 +55,8 @@ func (p *RandomPicker) Name() string {
 }
 
 // Pick selects a random pod from the list of candidates.
-func (p *RandomPicker) Pick(ctx *types.SchedulingContext, scoredPods []*types.ScoredPod) *types.Result {
-	ctx.Logger.V(logutil.DEBUG).Info(fmt.Sprintf("Selecting a random pod from %d candidates: %+v", len(scoredPods), scoredPods))
+func (p *RandomPicker) Pick(ctx context.Context, _ *types.CycleState, scoredPods []*types.ScoredPod) *types.Result {
+	log.FromContext(ctx).V(logutil.DEBUG).Info(fmt.Sprintf("Selecting a random pod from %d candidates: %+v", len(scoredPods), scoredPods))
 	i := rand.Intn(len(scoredPods))
 	return &types.Result{TargetPod: scoredPods[i]}
 }
