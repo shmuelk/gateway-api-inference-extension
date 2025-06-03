@@ -17,6 +17,7 @@ limitations under the License.
 package config
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
@@ -391,12 +392,11 @@ func (f *test1) Name() string {
 }
 
 // Filter filters out pods that doesn't meet the filter criteria.
-func (f *test1) Filter(ctx *types.SchedulingContext, pods []types.Pod) []types.Pod {
+func (f *test1) Filter(ctx context.Context, request *types.LLMRequest, cycleState *types.CycleState, pods []types.Pod) []types.Pod {
 	return pods
 }
 
 // compile-time type validation
-var _ framework.PreCycle = &test2{}
 var _ framework.Scorer = &test2{}
 var _ framework.PostCycle = &test2{}
 
@@ -406,13 +406,11 @@ func (f *test2) Name() string {
 	return test2Name
 }
 
-func (m *test2) PreCycle(ctx *types.SchedulingContext) {}
-
-func (m *test2) Score(ctx *types.SchedulingContext, pods []types.Pod) map[types.Pod]float64 {
+func (m *test2) Score(ctx context.Context, request *types.LLMRequest, cycleState *types.CycleState, pods []types.Pod) map[types.Pod]float64 {
 	return map[types.Pod]float64{}
 }
 
-func (m *test2) PostCycle(ctx *types.SchedulingContext, res *types.Result) {}
+func (m *test2) PostCycle(ctx context.Context, cycleState *types.CycleState, res *types.Result) {}
 
 // compile-time type validation
 var _ framework.Picker = &testPicker{}
@@ -423,7 +421,7 @@ func (p *testPicker) Name() string {
 	return testPickerName
 }
 
-func (p *testPicker) Pick(ctx *types.SchedulingContext, scoredPods []*types.ScoredPod) *types.Result {
+func (p *testPicker) Pick(ctx context.Context, cycleState *types.CycleState, scoredPods []*types.ScoredPod) *types.Result {
 	return nil
 }
 
