@@ -211,8 +211,8 @@ func run() error {
 		return err
 	}
 
-	// register all of the known plgin factories
-	RegisterAllPlgugins()
+	// register all of the known plugin factories
+	RegisterAllPlugins()
 
 	var theConfig *v1alpha1.EndpointPickerConfig
 	var instantiatedPlugins map[string]plugins.Plugin
@@ -261,12 +261,11 @@ func run() error {
 		schedulerConfig := scheduling.NewSchedulerConfig(profile.NewSingleProfileHandler(), map[string]*framework.SchedulerProfile{"schedulerv2": schedulerProfile})
 		scheduler = scheduling.NewSchedulerWithConfig(datastore, schedulerConfig)
 
+	case reqHeaderBasedSchedulerForTesting:
+		scheduler = conformance_epp.NewReqHeaderBasedScheduler(datastore)
+
 	default:
 		scheduler = scheduling.NewScheduler(datastore)
-	}
-
-	if reqHeaderBasedSchedulerForTesting {
-		scheduler = conformance_epp.NewReqHeaderBasedScheduler(datastore)
 	}
 
 	saturationDetector := saturationdetector.NewDetector(sdConfig, datastore, ctrl.Log)
@@ -376,7 +375,7 @@ func verifyMetricMapping(mapping backendmetrics.MetricMapping, logger logr.Logge
 	}
 }
 
-func RegisterAllPlgugins() {
+func RegisterAllPlugins() {
 	plugins := map[string]registry.Factory{
 		filter.LeastKVCacheFilterName:    filter.LeastKVCacheFilterFactory,
 		filter.LeastQueueFilterName:      filter.LeastQueueFilterFactory,
