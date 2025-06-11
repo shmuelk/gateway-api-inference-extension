@@ -145,8 +145,8 @@ plugins:
       hashBlockSize: 32
   maxScore:
     pluginName: max-score
-  profilePicker:
-    pluginName: all-profiles
+  profileHandler:
+    pluginName: single-profile
 schedulingProfiles:
   default:
     plugins:
@@ -161,8 +161,8 @@ const errorBadPluginJsonText = `
 apiVersion: inference.networking.x-k8s.io/v1alpha1
 kind: EndpointPickerConfig
 plugins:
-  profilePicker:
-    pluginName: all-profiles
+  profileHandler:
+    pluginName: single-profile
   prefixCache:
     pluginName: prefix-cache
     parameters:
@@ -179,8 +179,8 @@ const errorBadReferenceNoWeightText = `
 apiVersion: inference.networking.x-k8s.io/v1alpha1
 kind: EndpointPickerConfig
 plugins:
-  profilePicker:
-    pluginName: all-profiles
+  profileHandler:
+    pluginName: single-profile
   prefixCache:
     pluginName: prefix-cache
     parameters:
@@ -200,8 +200,8 @@ plugins:
     pluginName: low-queue
     parameters:
       threshold: qwer
-  profilePicker:
-    pluginName: all-profiles
+  profileHandler:
+    pluginName: single-profile
 schedulingProfiles:
   default:
     plugins:
@@ -213,8 +213,8 @@ const errorTwoPickersText = `
 apiVersion: inference.networking.x-k8s.io/v1alpha1
 kind: EndpointPickerConfig
 plugins:
-  profilePicker:
-    pluginName: all-profiles
+  profileHandler:
+    pluginName: single-profile
   maxScore:
     pluginName: max-score
   random:
@@ -242,10 +242,10 @@ const errorTwoProfilePickersText = `
 apiVersion: inference.networking.x-k8s.io/v1alpha1
 kind: EndpointPickerConfig
 plugins:
-  profilePicker:
-    pluginName: all-profiles
+  profileHandler:
+    pluginName: single-profile
   secondProfilePicker:
-    pluginName: all-profiles
+    pluginName: single-profile
   maxScore:
     pluginName: max-score
 schedulingProfiles:
