@@ -31,13 +31,16 @@ type EndpointPickerConfig struct {
 
 	// +required
 	// +kubebuilder:validation:Required
-	Plugins map[string]PluginSpec `json:"plugins"`
+	Plugins []PluginSpec `json:"plugins"`
 
 	// +required
 	// +kubebuilder:validation:Required
-	SchedulingProfiles map[string]SchedulingProfile `json:"schedulingProfiles"`
+	SchedulingProfiles []SchedulingProfile `json:"schedulingProfiles"`
 }
 type PluginSpec struct {
+	// +optional
+	Name string `json:"name"`
+
 	// +required
 	// +kubebuilder:validation:Required
 	PluginName string `json:"pluginName"`
@@ -47,6 +50,9 @@ type PluginSpec struct {
 }
 
 type SchedulingProfile struct {
+	// +optional
+	Name string `json:"name"`
+
 	// +required
 	// +kubebuilder:validation:Required
 	Plugins []SchedulingProfilePlugin `json:"plugins"`

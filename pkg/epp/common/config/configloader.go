@@ -68,12 +68,12 @@ func LoadConfig(configText []byte, fileName string, log logr.Logger) (*configapi
 
 func LoadPluginReferences(theConfig *configapi.EndpointPickerConfig, log logr.Logger) (map[string]plugins.Plugin, error) {
 	references := map[string]plugins.Plugin{}
-	for name, pluginConfig := range theConfig.Plugins {
+	for _, pluginConfig := range theConfig.Plugins {
 		thePlugin, err := InstantiatePlugin(pluginConfig, log)
 		if err != nil {
 			return nil, err
 		}
-		references[name] = thePlugin
+		references[pluginConfig.Name] = thePlugin
 	}
 	return references, nil
 }
@@ -94,10 +94,21 @@ func InstantiatePlugin(pluginSpec configapi.PluginSpec, log logr.Logger) (plugin
 }
 
 func validateConfiguration(theConfig *configapi.EndpointPickerConfig) error {
-	for name, pluginConfig := range theConfig.Plugins {
-		if name == "" || pluginConfig.PluginName == "" {
-			return errors.New("plugin reference definition missing name or plugin reference")
+	names := make(map[string]bool)
+
+	for idx, pluginConfig := range theConfig.Plugins {
+		if pluginConfig.PluginName == "" {
+			return errors.New("plugin reference definition missing a plugin name")
 		}
+		if pluginConfig.Name == "" {
+			theConfig.Plugins[idx].Name = pluginConfig.PluginName
+		}
+
+		if _, ok := names[pluginConfig.Name]; ok {
+			return fmt.Errorf("the name %s has been specified for more than one plugin", pluginConfig.Name)
+		}
+		names[pluginConfig.Name] = true
+
 		_, ok := registry.Registry[pluginConfig.PluginName]
 		if !ok {
 			return fmt.Errorf("plugin %s is not found", pluginConfig.PluginName)
@@ -108,10 +119,17 @@ func validateConfiguration(theConfig *configapi.EndpointPickerConfig) error {
 		return errors.New("there must be at least one scheduling profile in the configuration")
 	}
 
-	for name, profile := range theConfig.SchedulingProfiles {
-		if name == "" {
+	names = map[string]bool{}
+	for _, profile := range theConfig.SchedulingProfiles {
+		if profile.Name == "" {
 			return errors.New("SchedulingProfiles need a name")
 		}
+
+		if _, ok := names[profile.Name]; ok {
+			return fmt.Errorf("the name %s has been specified for more than one SchedulingProfile", profile.Name)
+		}
+		names[profile.Name] = true
+
 		if len(profile.Plugins) == 0 {
 			return errors.New("SchedulingProfiles need at least one plugin")
 		}
@@ -121,8 +139,8 @@ func validateConfiguration(theConfig *configapi.EndpointPickerConfig) error {
 			}
 
 			notFound := true
-			for name := range theConfig.Plugins {
-				if plugin.PluginRef == name {
+			for _, pluginConfig := range theConfig.Plugins {
+				if plugin.PluginRef == pluginConfig.Name {
 					notFound = false
 					break
 				}
@@ -130,9 +148,7 @@ func validateConfiguration(theConfig *configapi.EndpointPickerConfig) error {
 			if notFound {
 				return errors.New(plugin.PluginRef + " is a reference to an undefined Plugin")
 			}
-
 		}
-
 	}
 	return nil
 }

@@ -46,7 +46,7 @@ func LoadSchedulerConfig(theConfig *v1alpha1.EndpointPickerConfig, references ma
 
 	var profiles = map[string]*framework.SchedulerProfile{}
 
-	for profileName, configProfile := range theConfig.SchedulingProfiles {
+	for _, configProfile := range theConfig.SchedulingProfiles {
 		profile := framework.SchedulerProfile{}
 
 		for _, plugin := range configProfile.Plugins {
@@ -65,7 +65,7 @@ func LoadSchedulerConfig(theConfig *v1alpha1.EndpointPickerConfig, references ma
 				return nil, err
 			}
 		}
-		profiles[profileName] = &profile
+		profiles[configProfile.Name] = &profile
 	}
 
 	var profileHandler framework.ProfileHandler

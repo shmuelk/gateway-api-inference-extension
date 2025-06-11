@@ -31,16 +31,16 @@ func (in *EndpointPickerConfig) DeepCopyInto(out *EndpointPickerConfig) {
 	out.TypeMeta = in.TypeMeta
 	if in.Plugins != nil {
 		in, out := &in.Plugins, &out.Plugins
-		*out = make(map[string]PluginSpec, len(*in))
-		for key, val := range *in {
-			(*out)[key] = *val.DeepCopy()
+		*out = make([]PluginSpec, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
 	if in.SchedulingProfiles != nil {
 		in, out := &in.SchedulingProfiles, &out.SchedulingProfiles
-		*out = make(map[string]SchedulingProfile, len(*in))
-		for key, val := range *in {
-			(*out)[key] = *val.DeepCopy()
+		*out = make([]SchedulingProfile, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
 }
