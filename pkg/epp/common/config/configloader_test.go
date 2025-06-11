@@ -49,30 +49,35 @@ func TestLoadConfiguration(t *testing.T) {
 			Kind:       "EndpointPickerConfig",
 			APIVersion: "inference.networking.x-k8s.io/v1alpha1",
 		},
-		Plugins: map[string]configapi.PluginSpec{
-			"test1": {
+		Plugins: []configapi.PluginSpec{
+			{
+				Name:       "test1",
 				PluginName: test1Name,
 				Parameters: json.RawMessage("{\"threshold\":10}"),
 			},
-			"profileHandler": {
+			{
+				Name:       "profileHandler",
 				PluginName: "test-profile-handler",
 			},
-			"test2": {
+			{
+				Name:       test2Name,
 				PluginName: test2Name,
 				Parameters: json.RawMessage("{\"hashBlockSize\":32}"),
 			},
-			"testPicker": {
+			{
+				Name:       "testPicker",
 				PluginName: testPickerName,
 			},
 		},
-		SchedulingProfiles: map[string]configapi.SchedulingProfile{
-			"default": {
+		SchedulingProfiles: []configapi.SchedulingProfile{
+			{
+				Name: "default",
 				Plugins: []configapi.SchedulingProfilePlugin{
 					{
 						PluginRef: "test1",
 					},
 					{
-						PluginRef: "test2",
+						PluginRef: "test-two",
 						Weight:    &test2Weight,
 					},
 					{
@@ -250,25 +255,24 @@ const successConfigText = `
 apiVersion: inference.networking.x-k8s.io/v1alpha1
 kind: EndpointPickerConfig
 plugins:
-  test1:
-    pluginName: test-one
-    parameters:
-      threshold: 10
-  profileHandler:
-    pluginName: test-profile-handler
-  test2:
-    pluginName: test-two
-    parameters:
-      hashBlockSize: 32
-  testPicker:
-    pluginName: test-picker
+- name: test1
+  pluginName: test-one
+  parameters:
+    threshold: 10
+- name: profileHandler
+  pluginName: test-profile-handler
+- pluginName: test-two
+  parameters:
+    hashBlockSize: 32
+- name: testPicker
+  pluginName: test-picker
 schedulingProfiles:
-  default:
-    plugins:
-    - pluginRef: test1
-    - pluginRef: test2
-      weight: 50
-    - pluginRef: testPicker
+- name: default
+  plugins:
+  - pluginRef: test1
+  - pluginRef: test-two
+    weight: 50
+  - pluginRef: testPicker
 `
 
 //nolint:dupword
@@ -293,10 +297,10 @@ const errorBadPluginReferencePluginText = `
 apiVersion: inference.networking.x-k8s.io/v1alpha1
 kind: EndpointPickerConfig
 plugins:
-  testx:
-    pluginName: test-x
-  profileHandler:
-    pluginName: test-profile-handler
+- name: testx
+  pluginName: test-x
+- name: profileHandler
+  pluginName: test-profile-handler
 `
 
 //nolint:dupword
@@ -304,12 +308,12 @@ const errorNoProfilePickerText = `
 apiVersion: inference.networking.x-k8s.io/v1alpha1
 kind: EndpointPickerConfig
 plugins:
-  test1:
-    pluginName: test-one
-    parameters:
-      threshold: 10
+- name: test1
+  pluginName: test-one
+  parameters:
+    threshold: 10
 schedulingProfiles:
-  default:
+- name: default
 `
 
 //nolint:dupword
@@ -317,12 +321,12 @@ const errorNoProfilesText = `
 apiVersion: inference.networking.x-k8s.io/v1alpha1
 kind: EndpointPickerConfig
 plugins:
-  test1:
-    pluginName: test-one
-    parameters:
-      threshold: 10
-  profileHandler:
-    pluginName: test-profile-handler
+- name: test1
+  pluginName: test-one
+  parameters:
+    threshold: 10
+- name: profileHandler
+  pluginName: test-profile-handler
 `
 
 //nolint:dupword
@@ -330,16 +334,15 @@ const errorNoProfileNameText = `
 apiVersion: inference.networking.x-k8s.io/v1alpha1
 kind: EndpointPickerConfig
 plugins:
-  test1:
-    pluginName: test-one
-    parameters:
-      threshold: 10
-  profileHandler:
-    pluginName: test-profile-handler
+- name: test1
+  pluginName: test-one
+  parameters:
+    threshold: 10
+- name: profileHandler
+  pluginName: test-profile-handler
 schedulingProfiles:
-  "":
-    plugins:
-    - pluginRef: test1
+- plugins:
+  - pluginRef: test1
 `
 
 //nolint:dupword
@@ -347,14 +350,14 @@ const errorNoProfilePluginsText = `
 apiVersion: inference.networking.x-k8s.io/v1alpha1
 kind: EndpointPickerConfig
 plugins:
-  test1:
-    pluginName: test-one
-    parameters:
-      threshold: 10
-  profileHandler:
-    pluginName: test-profile-handler
+- name: test1
+  pluginName: test-one
+  parameters:
+    threshold: 10
+- name: profileHandler
+  pluginName: test-profile-handler
 schedulingProfiles:
-  default:
+- name: default
 `
 
 //nolint:dupword
@@ -362,12 +365,12 @@ const errorBadProfilePluginText = `
 apiVersion: inference.networking.x-k8s.io/v1alpha1
 kind: EndpointPickerConfig
 plugins:
-  profileHandler:
-    pluginName: test-profile-handler
+- name: profileHandler
+  pluginName: test-profile-handler
 schedulingProfiles:
-  default:
-    plugins:
-    - weight: 10
+- name: default
+  plugins:
+  - weight: 10
 `
 
 //nolint:dupword
@@ -375,12 +378,12 @@ const errorBadProfilePluginRefText = `
 apiVersion: inference.networking.x-k8s.io/v1alpha1
 kind: EndpointPickerConfig
 plugins:
-  profileHandler:
-    pluginName: test-profile-handler
+- name: profileHandler
+  pluginName: test-profile-handler
 schedulingProfiles:
-  default:
-    plugins:
-    - pluginRef: plover
+- name: default
+  plugins:
+  - pluginRef: plover
 `
 
 //nolint:dupword
@@ -388,12 +391,11 @@ const errorBadProfilePluginNameText = `
 apiVersion: inference.networking.x-k8s.io/v1alpha1
 kind: EndpointPickerConfig
 plugins:
-  "":
-    pluginName: test-profile-handler
+- pluginName: test-profile-handler
 schedulingProfiles:
-  default:
-    plugins:
-    - pluginRef: plover
+- name: default
+  plugins:
+  - pluginRef: plover
 `
 
 //nolint:dupword
@@ -401,16 +403,16 @@ const errorBadPluginReferenceParametersText = `
 apiVersion: inference.networking.x-k8s.io/v1alpha1
 kind: EndpointPickerConfig
 plugins:
-  test1:
-    pluginName: test-one
-    parameters:
-      threshold: asdf
-  profileHandler:
-    pluginName: test-profile-handler
+- name: test1
+  pluginName: test-one
+  parameters:
+    threshold: asdf
+- name: profileHandler
+  pluginName: test-profile-handler
 schedulingProfiles:
-  default:
-    plugins:
-    - pluginRef: test1
+- name: default
+  plugins:
+  - pluginRef: test1
 `
 
 //nolint:dupword
@@ -418,20 +420,20 @@ const errorDuplicatePluginText = `
 apiVersion: inference.networking.x-k8s.io/v1alpha1
 kind: EndpointPickerConfig
 plugins:
-  test1:
-    pluginName: test-one
-    parameters:
-      threshold: 10
-  test1:
-    pluginName: test-one
-    parameters:
-      threshold: 20
-  profileHandler:
-    pluginName: test-profile-handler
+- name: test1
+  pluginName: test-one
+  parameters:
+    threshold: 10
+- name: test1
+  pluginName: test-one
+  parameters:
+    threshold: 20
+- name: profileHandler
+  pluginName: test-profile-handler
 schedulingProfiles:
-  default:
-    plugins:
-    - pluginRef: test1
+- name: default
+  plugins:
+  - pluginRef: test1
 `
 
 //nolint:dupword
@@ -439,23 +441,23 @@ const errorDuplicateProfileText = `
 apiVersion: inference.networking.x-k8s.io/v1alpha1
 kind: EndpointPickerConfig
 plugins:
-  test1:
-    pluginName: test-one
-    parameters:
-      threshold: 10
-  test2:
-    pluginName: test-one
-    parameters:
-      threshold: 20
-  profileHandler:
-    pluginName: test-profile-handler
+- name: test1
+  pluginName: test-one
+  parameters:
+    threshold: 10
+- name: test2
+  pluginName: test-one
+  parameters:
+    threshold: 20
+- name: profileHandler
+  pluginName: test-profile-handler
 schedulingProfiles:
-  default:
-    plugins:
-    - pluginRef: test1
-  default:
-    plugins:
-    - pluginRef: test2
+- name: default
+  plugins:
+  - pluginRef: test1
+- name: default
+  plugins:
+  - pluginRef: test2
 `
 
 // compile-time type validation

@@ -135,25 +135,25 @@ const successConfigText = `
 apiVersion: inference.networking.x-k8s.io/v1alpha1
 kind: EndpointPickerConfig
 plugins:
-  lowQueue:
-    pluginName: low-queue
-    parameters:
-      threshold: 10
-  prefixCache:
-    pluginName: prefix-cache
-    parameters:
-      hashBlockSize: 32
-  maxScore:
-    pluginName: max-score
-  profileHandler:
-    pluginName: single-profile
+- name: lowQueue
+  pluginName: low-queue
+  parameters:
+    threshold: 10
+- name: prefixCache
+  pluginName: prefix-cache
+  parameters:
+    hashBlockSize: 32
+- name: maxScore
+  pluginName: max-score
+- name: profileHandler
+  pluginName: single-profile
 schedulingProfiles:
-  default:
-    plugins:
-    - pluginRef: lowQueue
-    - pluginRef: prefixCache
-      weight: 50
-    - pluginRef: maxScore
+- name: default
+  plugins:
+  - pluginRef: lowQueue
+  - pluginRef: prefixCache
+    weight: 50
+  - pluginRef: maxScore
 `
 
 //nolint:dupword
@@ -161,17 +161,17 @@ const errorBadPluginJsonText = `
 apiVersion: inference.networking.x-k8s.io/v1alpha1
 kind: EndpointPickerConfig
 plugins:
-  profileHandler:
-    pluginName: single-profile
-  prefixCache:
-    pluginName: prefix-cache
-    parameters:
-      hashBlockSize: asdf
+- name:profileHandler
+  pluginName: single-profile
+- name: prefixCache
+  pluginName: prefix-cache
+  parameters:
+    hashBlockSize: asdf
 schedulingProfiles:
-  default:
-    plugins:
-    - pluginRef: prefixCache
-      weight: 50
+- name: default
+  plugins:
+  - pluginRef: prefixCache
+    weight: 50
 `
 
 //nolint:dupword
@@ -179,16 +179,16 @@ const errorBadReferenceNoWeightText = `
 apiVersion: inference.networking.x-k8s.io/v1alpha1
 kind: EndpointPickerConfig
 plugins:
-  profileHandler:
-    pluginName: single-profile
-  prefixCache:
-    pluginName: prefix-cache
-    parameters:
-      hashBlockSize: 32
+- name: profileHandler
+  pluginName: single-profile
+- name: prefixCache
+  pluginName: prefix-cache
+  parameters:
+    hashBlockSize: 32
 schedulingProfiles:
-  default:
-    plugins:
-    - pluginRef: prefixCache
+- name: default
+  plugins:
+  - pluginRef: prefixCache
 `
 
 //nolint:dupword
@@ -196,16 +196,16 @@ const errorPluginReferenceJsonText = `
 apiVersion: inference.networking.x-k8s.io/v1alpha1
 kind: EndpointPickerConfig
 plugins:
-  lowQueue:
-    pluginName: low-queue
-    parameters:
-      threshold: qwer
-  profileHandler:
-    pluginName: single-profile
+- name: lowQueue
+  pluginName: low-queue
+  parameters:
+    threshold: qwer
+- name: profileHandler
+  pluginName: single-profile
 schedulingProfiles:
-  default:
-    plugins:
-    - pluginRef: lowQueue
+- name: default
+  plugins:
+  - pluginRef: lowQueue
 `
 
 //nolint:dupword
@@ -213,17 +213,17 @@ const errorTwoPickersText = `
 apiVersion: inference.networking.x-k8s.io/v1alpha1
 kind: EndpointPickerConfig
 plugins:
-  profileHandler:
-    pluginName: single-profile
-  maxScore:
-    pluginName: max-score
-  random:
-    pluginName: random
+- name: profileHandler
+  pluginName: single-profile
+- name: maxScore
+  pluginName: max-score
+- name: random
+  pluginName: random
 schedulingProfiles:
-  default:
-    plugins:
-    - pluginRef: maxScore
-    - pluginRef: random
+- name: default
+  plugins:
+  - pluginRef: maxScore
+  - pluginRef: random
 `
 
 //nolint:dupword
@@ -231,10 +231,10 @@ const errorConfigText = `
 apiVersion: inference.networking.x-k8s.io/v1alpha1
 kind: EndpointPickerConfig
 plugins:
-  lowQueue:
-    pluginName: low-queue
-    parameters:
-      threshold: 10
+- name: lowQueue
+  pluginName: low-queue
+  parameters:
+    threshold: 10
 `
 
 //nolint:dupword
@@ -242,16 +242,16 @@ const errorTwoProfilePickersText = `
 apiVersion: inference.networking.x-k8s.io/v1alpha1
 kind: EndpointPickerConfig
 plugins:
-  profileHandler:
-    pluginName: single-profile
-  secondProfilePicker:
-    pluginName: single-profile
-  maxScore:
-    pluginName: max-score
+- name: profileHandler
+  pluginName: single-profile
+- name: secondProfilePicker
+  pluginName: single-profile
+- name: maxScore
+  pluginName: max-score
 schedulingProfiles:
-  default:
-    plugins:
-    - pluginRef: maxScore
+- name: default
+  plugins:
+  - pluginRef: maxScore
 `
 
 //nolint:dupword
@@ -259,10 +259,10 @@ const errorNoProfilePickersText = `
 apiVersion: inference.networking.x-k8s.io/v1alpha1
 kind: EndpointPickerConfig
 plugins:
-  maxScore:
-    pluginName: max-score
+- name: maxScore
+  pluginName: max-score
 schedulingProfiles:
-  default:
-    plugins:
-    - pluginRef: maxScore
+- name: default
+  plugins:
+  - pluginRef: maxScore
 `
