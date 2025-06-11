@@ -1,0 +1,268 @@
+/*
+Copyright 2025 The Kubernetes Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package scheduling
+
+import (
+	"fmt"
+	"testing"
+
+	commonconfig "sigs.k8s.io/gateway-api-inference-extension/pkg/epp/common/config"
+	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/registry"
+	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/scheduling/framework/plugins/filter"
+	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/scheduling/framework/plugins/multi/prefix"
+	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/scheduling/framework/plugins/picker"
+	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/scheduling/framework/plugins/profile"
+	logutil "sigs.k8s.io/gateway-api-inference-extension/pkg/epp/util/logging"
+)
+
+// Cause the various init() functions to registers the plugins
+var _ = profile.SingleProfileHandler{}
+var _ = filter.LeastQueueFilter{}
+var _ = prefix.Plugin{}
+var _ = picker.MaxScorePicker{}
+
+func TestLoadSchedulerConfig(t *testing.T) {
+	log := logutil.NewTestLogger()
+
+	tests := []struct {
+		name       string
+		configText string
+		wantErr    bool
+	}{
+		{
+			name:       "success",
+			configText: successConfigText,
+			wantErr:    false,
+		},
+		{
+			name:       "errorBadPluginJson",
+			configText: errorBadPluginJsonText,
+			wantErr:    true,
+		},
+		{
+			name:       "errorBadReferenceNoWeight",
+			configText: errorBadReferenceNoWeightText,
+			wantErr:    true,
+		},
+		{
+			name:       "errorPluginReferenceJson",
+			configText: errorPluginReferenceJsonText,
+			wantErr:    true,
+		},
+		{
+			name:       "errorTwoPickers",
+			configText: errorTwoPickersText,
+			wantErr:    true,
+		},
+		{
+			name:       "errorConfig",
+			configText: errorConfigText,
+			wantErr:    true,
+		},
+		{
+			name:       "errorTwoProfilePickers",
+			configText: errorTwoProfilePickersText,
+			wantErr:    true,
+		},
+		{
+			name:       "errorNoProfilePickers",
+			configText: errorNoProfilePickersText,
+			wantErr:    true,
+		},
+	}
+
+	registerNeededPlgugins()
+
+	for _, test := range tests {
+		fmt.Printf("\n\n%s\n\n", test.name)
+		theConfig, err := commonconfig.LoadConfig([]byte(test.configText), "", log)
+		if err != nil {
+			if test.wantErr {
+				continue
+			}
+			t.Fatalf("LoadConfig returned unexpected error: %v", err)
+		}
+		instantiatedPlugins, err := commonconfig.LoadPluginReferences(theConfig, log)
+		if err != nil {
+			if test.wantErr {
+				continue
+			}
+			t.Fatalf("LoadPluginReferences returned unexpected error: %v", err)
+		}
+
+		_, err = LoadSchedulerConfig(theConfig, instantiatedPlugins, log)
+		if err != nil {
+			if !test.wantErr {
+				t.Errorf("LoadSchedulerConfig returned an unexpected error. error %v", err)
+			}
+		} else if test.wantErr {
+			t.Errorf("LoadSchedulerConfig did not return an expected error (%s)", test.name)
+		}
+	}
+}
+
+func registerNeededPlgugins() {
+	plugins := map[string]registry.Factory{
+		filter.LowQueueFilterName:           filter.LowQueueFilterFactory,
+		prefix.PrefixCachePluginName:        prefix.PrefixCachePluginFactory,
+		picker.MaxScorePickerName:           picker.MaxScorePickerFactory,
+		picker.RandomPickerName:             picker.RandomPickerFactory,
+		profilepicker.AllProfilesPickerName: profilepicker.AllProfilesPickerFactory,
+	}
+	for name, factory := range plugins {
+		registry.Register(name, factory)
+	}
+}
+
+// The following multi-line string constants, cause false positive lint errors (dupword)
+
+//nolint:dupword
+const successConfigText = `
+apiVersion: inference.networking.x-k8s.io/v1alpha1
+kind: EndpointPickerConfig
+plugins:
+  lowQueue:
+    pluginName: low-queue
+    parameters:
+      threshold: 10
+  prefixCache:
+    pluginName: prefix-cache
+    parameters:
+      hashBlockSize: 32
+  maxScore:
+    pluginName: max-score
+  profilePicker:
+    pluginName: all-profiles
+schedulingProfiles:
+  default:
+    plugins:
+    - pluginRef: lowQueue
+    - pluginRef: prefixCache
+      weight: 50
+    - pluginRef: maxScore
+`
+
+//nolint:dupword
+const errorBadPluginJsonText = `
+apiVersion: inference.networking.x-k8s.io/v1alpha1
+kind: EndpointPickerConfig
+plugins:
+  profilePicker:
+    pluginName: all-profiles
+  prefixCache:
+    pluginName: prefix-cache
+    parameters:
+      hashBlockSize: asdf
+schedulingProfiles:
+  default:
+    plugins:
+    - pluginRef: prefixCache
+      weight: 50
+`
+
+//nolint:dupword
+const errorBadReferenceNoWeightText = `
+apiVersion: inference.networking.x-k8s.io/v1alpha1
+kind: EndpointPickerConfig
+plugins:
+  profilePicker:
+    pluginName: all-profiles
+  prefixCache:
+    pluginName: prefix-cache
+    parameters:
+      hashBlockSize: 32
+schedulingProfiles:
+  default:
+    plugins:
+    - pluginRef: prefixCache
+`
+
+//nolint:dupword
+const errorPluginReferenceJsonText = `
+apiVersion: inference.networking.x-k8s.io/v1alpha1
+kind: EndpointPickerConfig
+plugins:
+  lowQueue:
+    pluginName: low-queue
+    parameters:
+      threshold: qwer
+  profilePicker:
+    pluginName: all-profiles
+schedulingProfiles:
+  default:
+    plugins:
+    - pluginRef: lowQueue
+`
+
+//nolint:dupword
+const errorTwoPickersText = `
+apiVersion: inference.networking.x-k8s.io/v1alpha1
+kind: EndpointPickerConfig
+plugins:
+  profilePicker:
+    pluginName: all-profiles
+  maxScore:
+    pluginName: max-score
+  random:
+    pluginName: random
+schedulingProfiles:
+  default:
+    plugins:
+    - pluginRef: maxScore
+    - pluginRef: random
+`
+
+//nolint:dupword
+const errorConfigText = `
+apiVersion: inference.networking.x-k8s.io/v1alpha1
+kind: EndpointPickerConfig
+plugins:
+  lowQueue:
+    pluginName: low-queue
+    parameters:
+      threshold: 10
+`
+
+//nolint:dupword
+const errorTwoProfilePickersText = `
+apiVersion: inference.networking.x-k8s.io/v1alpha1
+kind: EndpointPickerConfig
+plugins:
+  profilePicker:
+    pluginName: all-profiles
+  secondProfilePicker:
+    pluginName: all-profiles
+  maxScore:
+    pluginName: max-score
+schedulingProfiles:
+  default:
+    plugins:
+    - pluginRef: maxScore
+`
+
+//nolint:dupword
+const errorNoProfilePickersText = `
+apiVersion: inference.networking.x-k8s.io/v1alpha1
+kind: EndpointPickerConfig
+plugins:
+  maxScore:
+    pluginName: max-score
+schedulingProfiles:
+  default:
+    plugins:
+    - pluginRef: maxScore
+`
