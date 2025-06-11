@@ -117,11 +117,11 @@ func TestLoadSchedulerConfig(t *testing.T) {
 
 func registerNeededPlgugins() {
 	plugins := map[string]registry.Factory{
-		filter.LowQueueFilterName:           filter.LowQueueFilterFactory,
-		prefix.PrefixCachePluginName:        prefix.PrefixCachePluginFactory,
-		picker.MaxScorePickerName:           picker.MaxScorePickerFactory,
-		picker.RandomPickerName:             picker.RandomPickerFactory,
-		profilepicker.AllProfilesPickerName: profilepicker.AllProfilesPickerFactory,
+		filter.LowQueueFilterName:        filter.LowQueueFilterFactory,
+		prefix.PrefixCachePluginName:     prefix.PrefixCachePluginFactory,
+		picker.MaxScorePickerName:        picker.MaxScorePickerFactory,
+		picker.RandomPickerName:          picker.RandomPickerFactory,
+		profile.SingleProfileHandlerName: profile.SingleProfileHandlerFactory,
 	}
 	for name, factory := range plugins {
 		registry.Register(name, factory)

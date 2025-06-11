@@ -5,8 +5,8 @@ plugins:
     pluginName: test-one
     parameters:
       threshold: 10
-  profilePicker:
-    pluginName: test-profile-picker
+  profileHandler:
+    pluginName: test-profile-handler
   test2:
     pluginName: test-two
     parameters:

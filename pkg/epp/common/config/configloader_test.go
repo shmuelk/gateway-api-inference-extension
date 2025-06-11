@@ -33,10 +33,10 @@ import (
 )
 
 const (
-	testProfilePickerName = "test-profile-picker"
-	test1Name             = "test-one"
-	test2Name             = "test-two"
-	testPickerName        = "test-picker"
+	testProfileHandlerName = "test-profile-handler"
+	test1Name              = "test-one"
+	test2Name              = "test-two"
+	testPickerName         = "test-picker"
 )
 
 func TestLoadConfiguration(t *testing.T) {
@@ -54,8 +54,8 @@ func TestLoadConfiguration(t *testing.T) {
 				PluginName: test1Name,
 				Parameters: json.RawMessage("{\"threshold\":10}"),
 			},
-			"profilePicker": {
-				PluginName: "test-profile-picker",
+			"profileHandler": {
+				PluginName: "test-profile-handler",
 			},
 			"test2": {
 				PluginName: test2Name,
@@ -254,8 +254,8 @@ plugins:
     pluginName: test-one
     parameters:
       threshold: 10
-  profilePicker:
-    pluginName: test-profile-picker
+  profileHandler:
+    pluginName: test-profile-handler
   test2:
     pluginName: test-two
     parameters:
@@ -295,8 +295,8 @@ kind: EndpointPickerConfig
 plugins:
   testx:
     pluginName: test-x
-  profilePicker:
-    pluginName: test-profile-picker
+  profileHandler:
+    pluginName: test-profile-handler
 `
 
 //nolint:dupword
@@ -321,8 +321,8 @@ plugins:
     pluginName: test-one
     parameters:
       threshold: 10
-  profilePicker:
-    pluginName: test-profile-picker
+  profileHandler:
+    pluginName: test-profile-handler
 `
 
 //nolint:dupword
@@ -334,8 +334,8 @@ plugins:
     pluginName: test-one
     parameters:
       threshold: 10
-  profilePicker:
-    pluginName: test-profile-picker
+  profileHandler:
+    pluginName: test-profile-handler
 schedulingProfiles:
   "":
     plugins:
@@ -351,8 +351,8 @@ plugins:
     pluginName: test-one
     parameters:
       threshold: 10
-  profilePicker:
-    pluginName: test-profile-picker
+  profileHandler:
+    pluginName: test-profile-handler
 schedulingProfiles:
   default:
 `
@@ -362,8 +362,8 @@ const errorBadProfilePluginText = `
 apiVersion: inference.networking.x-k8s.io/v1alpha1
 kind: EndpointPickerConfig
 plugins:
-  profilePicker:
-    pluginName: test-profile-picker
+  profileHandler:
+    pluginName: test-profile-handler
 schedulingProfiles:
   default:
     plugins:
@@ -375,8 +375,8 @@ const errorBadProfilePluginRefText = `
 apiVersion: inference.networking.x-k8s.io/v1alpha1
 kind: EndpointPickerConfig
 plugins:
-  profilePicker:
-    pluginName: test-profile-picker
+  profileHandler:
+    pluginName: test-profile-handler
 schedulingProfiles:
   default:
     plugins:
@@ -389,7 +389,7 @@ apiVersion: inference.networking.x-k8s.io/v1alpha1
 kind: EndpointPickerConfig
 plugins:
   "":
-    pluginName: test-profile-picker
+    pluginName: test-profile-handler
 schedulingProfiles:
   default:
     plugins:
@@ -405,8 +405,8 @@ plugins:
     pluginName: test-one
     parameters:
       threshold: asdf
-  profilePicker:
-    pluginName: test-profile-picker
+  profileHandler:
+    pluginName: test-profile-handler
 schedulingProfiles:
   default:
     plugins:
@@ -426,8 +426,8 @@ plugins:
     pluginName: test-one
     parameters:
       threshold: 20
-  profilePicker:
-    pluginName: test-profile-picker
+  profileHandler:
+    pluginName: test-profile-handler
 schedulingProfiles:
   default:
     plugins:
@@ -447,8 +447,8 @@ plugins:
     pluginName: test-one
     parameters:
       threshold: 20
-  profilePicker:
-    pluginName: test-profile-picker
+  profileHandler:
+    pluginName: test-profile-handler
 schedulingProfiles:
   default:
     plugins:
@@ -510,7 +510,7 @@ var _ framework.ProfileHandler = &testProfileHandler{}
 type testProfileHandler struct{}
 
 func (p *testProfileHandler) Name() string {
-	return testProfilePickerName
+	return testProfileHandlerName
 }
 
 func (p *testProfileHandler) Pick(ctx context.Context, request *types.LLMRequest, profiles map[string]*framework.SchedulerProfile, executionResults map[string]*types.ProfileRunResult) map[string]*framework.SchedulerProfile {
@@ -542,7 +542,7 @@ func registerTestPlugins() {
 		},
 	)
 
-	registry.Register(testProfilePickerName,
+	registry.Register(testProfileHandlerName,
 		func(parameters json.RawMessage) (plugins.Plugin, error) {
 			return &testProfileHandler{}, nil
 		},
