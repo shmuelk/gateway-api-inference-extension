@@ -31,38 +31,56 @@ type EndpointPickerConfig struct {
 
 	// +required
 	// +kubebuilder:validation:Required
+	// Plugins is the list of plugins that will be instantiated.
 	Plugins []PluginSpec `json:"plugins"`
 
 	// +required
 	// +kubebuilder:validation:Required
+	// SchedulingProfiles is the list of named SchedulingProfiles
+	//                    that will be created.
 	SchedulingProfiles []SchedulingProfile `json:"schedulingProfiles"`
 }
 type PluginSpec struct {
 	// +optional
+	// Name provides a name for SchedulingProfile plugin entries to
+	//      reference. If omitted, the value of the PluginName field
+	//      will be used.
 	Name string `json:"name"`
 
 	// +required
 	// +kubebuilder:validation:Required
+	// PluginName specifies the plugin to be instantiated.
 	PluginName string `json:"pluginName"`
 
 	// +optional
+	// Parameters are the set of parameters to be passed to the plugin's
+	//            factory function. The factory function is responsible
+	//            to parse the parameters.
 	Parameters json.RawMessage `json:"parameters"`
 }
 
 type SchedulingProfile struct {
-	// +optional
+	// +kubebuilder:validation:Required
+	// Name specifies the name of this SvhedulingProfile
 	Name string `json:"name"`
 
 	// +required
 	// +kubebuilder:validation:Required
+	// Plugins is the list of plugins for this SchedulingProfile. They are assigned
+	//         to the appropriate "slots" based on their type.
 	Plugins []SchedulingProfilePlugin `json:"plugins"`
 }
 
 type SchedulingProfilePlugin struct {
 	// +required
 	// +kubebuilder:validation:Required
+	// PluginRef specifies a partiular Plugin instance to be associated with
+	//           this SchedulingProfile. The reference is to the name of an
+	//           entry of the Plugins defined in the configuration's Plugins
+	//           section
 	PluginRef string `json:"pluginRef"`
 
 	// +optional
+	// Weight is the weight fo be used if this plugin is a Scorer.
 	Weight *int `json:"weight"`
 }
