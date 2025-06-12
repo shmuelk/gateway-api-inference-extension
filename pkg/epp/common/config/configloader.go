@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 
+	"sigs.k8s.io/gateway-api-inference-extension/api/config/v1alpha1"
 	configapi "sigs.k8s.io/gateway-api-inference-extension/api/config/v1alpha1"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/plugins"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/registry"
@@ -34,6 +35,7 @@ import (
 var scheme = runtime.NewScheme()
 
 func init() {
+	v1alpha1.SchemeBuilder.Register(v1alpha1.RegisterDefaults)
 	utilruntime.Must(configapi.Install(scheme))
 }
 
@@ -96,12 +98,9 @@ func InstantiatePlugin(pluginSpec configapi.PluginSpec, log logr.Logger) (plugin
 func validateConfiguration(theConfig *configapi.EndpointPickerConfig) error {
 	names := make(map[string]bool)
 
-	for idx, pluginConfig := range theConfig.Plugins {
+	for _, pluginConfig := range theConfig.Plugins {
 		if pluginConfig.PluginName == "" {
 			return errors.New("plugin reference definition missing a plugin name")
-		}
-		if pluginConfig.Name == "" {
-			theConfig.Plugins[idx].Name = pluginConfig.PluginName
 		}
 
 		if _, ok := names[pluginConfig.Name]; ok {

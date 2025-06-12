@@ -21,5 +21,9 @@ package v1alpha1
 //
 // This naming convension is required by the defalter-gen code.
 func SetDefaults_EndpointPickerConfig(cfg *EndpointPickerConfig) {
-
+	for idx, pluginConfig := range cfg.Plugins {
+		if pluginConfig.Name == "" {
+			cfg.Plugins[idx].Name = pluginConfig.PluginName
+		}
+	}
 }
