@@ -43,7 +43,6 @@ import (
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/datastore"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/metrics"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/metrics/collectors"
-	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/plugins"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/requestcontrol"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/saturationdetector"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/scheduling"
@@ -218,7 +217,7 @@ func (r *Runner) Run(ctx context.Context) error {
 	}
 
 	var theConfig *v1alpha1.EndpointPickerConfig
-	var instantiatedPlugins map[string]plugins.Plugin
+	epp := newEppHandle()
 
 	if len(*configText) != 0 || len(*configFile) != 0 {
 		theConfig, err = config.LoadConfig([]byte(*configText), *configFile)
@@ -227,14 +226,13 @@ func (r *Runner) Run(ctx context.Context) error {
 			return err
 		}
 
-		epp := eppHandle{}
-		instantiatedPlugins, err = config.LoadPluginReferences(theConfig.Plugins, epp)
+		err = config.LoadPluginReferences(theConfig.Plugins, epp)
 		if err != nil {
 			setupLog.Error(err, "Failed to instantiate the plugins")
 			return err
 		}
 
-		r.schedulerConfig, err = scheduling.LoadSchedulerConfig(theConfig.SchedulingProfiles, instantiatedPlugins, setupLog)
+		r.schedulerConfig, err = scheduling.LoadSchedulerConfig(theConfig.SchedulingProfiles, epp, setupLog)
 		if err != nil {
 			setupLog.Error(err, "Failed to create Scheduler configuration")
 			return err
@@ -251,9 +249,7 @@ func (r *Runner) Run(ctx context.Context) error {
 	saturationDetector := saturationdetector.NewDetector(sdConfig, datastore, ctrl.Log)
 
 	// Add requestControl plugins
-	if instantiatedPlugins != nil {
-		r.requestControlConfig.AddPlugins(instantiatedPlugins)
-	}
+	r.requestControlConfig.AddPlugins(epp.GetAllPlugins())
 	director := requestcontrol.NewDirectorWithConfig(datastore, scheduler, saturationDetector, r.requestControlConfig)
 
 	// --- Setup ExtProc Server Runner ---
