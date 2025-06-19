@@ -46,8 +46,11 @@ func (c *Config) WithPostResponsePlugins(plugins ...PostResponse) *Config {
 	return c
 }
 
-func (c *Config) AddPlugins(instances map[string]plugins.Plugin) {
-	for _, plugin := range instances {
+func (c *Config) AddPlugins(thePlugins []plugins.Plugin) {
+	for _, plugin := range thePlugins {
+		if preRequest, ok := plugin.(PreRequest); ok {
+			c.preRequestPlugins = append(c.preRequestPlugins, preRequest)
+		}
 		if postResponse, ok := plugin.(PostResponse); ok {
 			c.postResponsePlugins = append(c.postResponsePlugins, postResponse)
 		}
