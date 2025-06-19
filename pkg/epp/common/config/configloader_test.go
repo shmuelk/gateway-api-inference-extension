@@ -210,14 +210,15 @@ func TestLoadPluginReferences(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig returned unexpected error: %v", err)
 	}
-	references, err := LoadPluginReferences(theConfig.Plugins, testHandle{})
+	handle := newTestHandle()
+	err = LoadPluginReferences(theConfig.Plugins, handle)
 	if err != nil {
 		t.Fatalf("LoadPluginReferences returned unexpected error: %v", err)
 	}
-	if len(references) == 0 {
+	if len(handle.GetAllPlugins()) == 0 {
 		t.Fatalf("LoadPluginReferences returned an empty set of references")
 	}
-	if t1, ok := references["test1"]; !ok {
+	if t1 := handle.Plugin("test1"); t1 == nil {
 		t.Fatalf("LoadPluginReferences returned references did not contain test1")
 	} else if _, ok := t1.(*test1); !ok {
 		t.Fatalf("LoadPluginReferences returned references value for test1 has the wrong type %#v", t1)
@@ -227,7 +228,7 @@ func TestLoadPluginReferences(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig returned unexpected error: %v", err)
 	}
-	_, err = LoadPluginReferences(theConfig.Plugins, testHandle{})
+	err = LoadPluginReferences(theConfig.Plugins, newTestHandle())
 	if err == nil {
 		t.Fatalf("LoadPluginReferences did not return the expected error")
 	}
@@ -235,7 +236,7 @@ func TestLoadPluginReferences(t *testing.T) {
 
 func TestInstantiatePlugin(t *testing.T) {
 	plugSpec := configapi.PluginSpec{PluginName: "plover"}
-	_, err := InstantiatePlugin(plugSpec, testHandle{})
+	_, err := InstantiatePlugin(plugSpec, newTestHandle())
 	if err == nil {
 		t.Fatalf("InstantiatePlugin did not return the expected error")
 	}
