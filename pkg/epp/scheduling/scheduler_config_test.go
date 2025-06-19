@@ -108,6 +108,33 @@ func TestLoadSchedulerConfig(t *testing.T) {
 }
 
 type testHandle struct {
+	thePlugins map[string]plugins.Plugin
+}
+
+func (h *testHandle) Plugin(name string) plugins.Plugin {
+	return h.thePlugins[name]
+}
+
+func (h *testHandle) AddPlugin(name string, plugin plugins.Plugin) {
+	h.thePlugins[name] = plugin
+}
+
+func (h *testHandle) GetAllPlugins() []plugins.Plugin {
+	result := make([]plugins.Plugin, 0)
+	for _, plugin := range h.thePlugins {
+		result = append(result, plugin)
+	}
+	return result
+}
+
+func (h *testHandle) GetAllPluginsWithNames() map[string]plugins.Plugin {
+	return h.thePlugins
+}
+
+func newTestHandle() *testHandle {
+	return &testHandle{
+		thePlugins: map[string]plugins.Plugin{},
+	}
 }
 
 func registerNeededPlgugins() {
