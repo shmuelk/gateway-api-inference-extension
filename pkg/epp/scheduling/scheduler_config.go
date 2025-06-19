@@ -41,7 +41,7 @@ type SchedulerConfig struct {
 	profiles       map[string]*framework.SchedulerProfile
 }
 
-func LoadSchedulerConfig(configProfiles []v1alpha1.SchedulingProfile, references map[string]plugins.Plugin,
+func LoadSchedulerConfig(configProfiles []v1alpha1.SchedulingProfile, handle plugins.Handle,
 	log logr.Logger) (*SchedulerConfig, error) {
 
 	var profiles = map[string]*framework.SchedulerProfile{}
@@ -51,7 +51,7 @@ func LoadSchedulerConfig(configProfiles []v1alpha1.SchedulingProfile, references
 
 		for _, plugin := range configProfile.Plugins {
 			var err error
-			thePlugin := references[plugin.PluginRef]
+			thePlugin := handle.Plugin(plugin.PluginRef)
 			if theScorer, ok := thePlugin.(framework.Scorer); ok {
 				if plugin.Weight == nil {
 					err = fmt.Errorf("scorer %s is missing a weight", plugin.PluginRef)
@@ -71,7 +71,7 @@ func LoadSchedulerConfig(configProfiles []v1alpha1.SchedulingProfile, references
 	var profileHandler framework.ProfileHandler
 	var profileHandlerName string
 
-	for pluginName, thePlugin := range references {
+	for pluginName, thePlugin := range handle.GetAllPluginsWithNames() {
 		if theProfileHandler, ok := thePlugin.(framework.ProfileHandler); ok {
 			if profileHandler != nil {
 				return nil, fmt.Errorf("only one profile handler is allowed. Both %s and %s are profile handlers", profileHandlerName, pluginName)
