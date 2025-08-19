@@ -142,8 +142,8 @@ func (p *SchedulerProfile) runFilterPlugins(ctx context.Context, request *types.
 }
 
 func (p *SchedulerProfile) runScorerPlugins(ctx context.Context, request *types.LLMRequest, cycleState *types.CycleState, pods []types.Pod) map[types.Pod]float64 {
-	loggerDebug := log.FromContext(ctx).V(logutil.DEBUG)
-	loggerDebug.Info("Before running scorer plugins", "pods", pods)
+	logger := log.FromContext(ctx)
+	logger.V(logutil.DEBUG).Info("Before running scorer plugins", "pods", pods)
 
 	weightedScorePerPod := make(map[types.Pod]float64, len(pods))
 	for _, pod := range pods {
@@ -151,16 +151,17 @@ func (p *SchedulerProfile) runScorerPlugins(ctx context.Context, request *types.
 	}
 	// Iterate through each scorer in the chain and accumulate the weighted scores.
 	for _, scorer := range p.scorers {
-		loggerDebug.Info("Running scorer", "scorer", scorer.TypedName().Type)
+		logger.V(logutil.DEBUG).Info("Running scorer", "scorer", scorer.TypedName().Type)
 		before := time.Now()
 		scores := scorer.Score(ctx, cycleState, request, pods)
 		metrics.RecordSchedulerPluginProcessingLatency(ScorerPluginType, scorer.TypedName().Type, time.Since(before))
 		for pod, score := range scores { // weight is relative to the sum of weights
+			logger.V(logutil.TRACE).Info("calculated score", "plugin", scorer.TypedName(), "endpoint", pod.GetPod().NamespacedName, "score", score)
 			weightedScorePerPod[pod] += score * float64(scorer.Weight())
 		}
-		loggerDebug.Info("After running scorer", "scorer", scorer.TypedName().Type)
+		logger.V(logutil.DEBUG).Info("After running scorer", "scorer", scorer.TypedName().Type)
 	}
-	loggerDebug.Info("After running scorer plugins")
+	logger.V(logutil.DEBUG).Info("After running scorer plugins")
 
 	return weightedScorePerPod
 }
