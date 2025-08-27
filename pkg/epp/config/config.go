@@ -16,9 +16,23 @@ limitations under the License.
 
 package config
 
-import "sigs.k8s.io/gateway-api-inference-extension/pkg/epp/scheduling"
+import (
+	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/saturationdetector"
+	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/scheduling"
+)
 
 // Config is the configuration loaded from the text based configuration
 type Config struct {
-	SchedulerConfig *scheduling.SchedulerConfig
+	SchedulerConfig          *scheduling.SchedulerConfig
+	FeatureConfig            FeatureConfig
+	SaturationDetectorConfig saturationdetector.Config
+}
+
+// FeatureConfig contains a set of flags for enabling various experimental fetures/APIs in the EPP
+type FeatureConfig struct {
+	// EnableDataLayer if true, indicates that the experimental DataLayer APIs are enabled
+	EnableDataLayer bool
+
+	// EnableFlowControl if true, indicates that the experimental FlowControl feature is enabled.
+	EnableFlowControl bool
 }
