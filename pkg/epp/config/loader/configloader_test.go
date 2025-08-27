@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,6 +30,7 @@ import (
 	configapi "sigs.k8s.io/gateway-api-inference-extension/apix/config/v1alpha1"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/config"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/plugins"
+	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/saturationdetector"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/scheduling/framework"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/scheduling/framework/plugins/multi/prefix"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/scheduling/framework/plugins/picker"
@@ -96,6 +98,10 @@ func TestLoadRawConfiguration(t *testing.T) {
 					},
 				},
 			},
+		},
+		FeatureGates: &configapi.FeatureGates{EnableDataLayer: true},
+		SaturationDetector: &configapi.SaturationDetector{
+			MetricsStalenessThreshold: metav1.Duration{Duration: 150 * time.Millisecond},
 		},
 	}
 
@@ -199,6 +205,12 @@ func TestLoadRawConfigurationWithDefaults(t *testing.T) {
 				},
 			},
 		},
+		FeatureGates: &configapi.FeatureGates{EnableDataLayer: true},
+		SaturationDetector: &configapi.SaturationDetector{
+			QueueDepthThreshold:       saturationdetector.DefaultQueueDepthThreshold,
+			KVCacheUtilThreshold:      saturationdetector.DefaultKVCacheUtilThreshold,
+			MetricsStalenessThreshold: metav1.Duration{Duration: 150 * time.Millisecond},
+		},
 	}
 
 	goodConfigNoProfiles := &configapi.EndpointPickerConfig{
@@ -233,6 +245,12 @@ func TestLoadRawConfigurationWithDefaults(t *testing.T) {
 					},
 				},
 			},
+		},
+		FeatureGates: &configapi.FeatureGates{},
+		SaturationDetector: &configapi.SaturationDetector{
+			QueueDepthThreshold:       saturationdetector.DefaultQueueDepthThreshold,
+			KVCacheUtilThreshold:      saturationdetector.DefaultKVCacheUtilThreshold,
+			MetricsStalenessThreshold: metav1.Duration{Duration: saturationdetector.DefaultMetricsStalenessThreshold},
 		},
 	}
 
@@ -446,6 +464,64 @@ func registerNeededPlgugins() {
 	plugins.Register(profile.SingleProfileHandlerType, profile.SingleProfileHandlerFactory)
 }
 
+func TestNewDetector(t *testing.T) {
+	tests := []struct {
+		name           string
+		config         *configapi.SaturationDetector
+		expectedConfig saturationdetector.Config
+	}{
+		{
+			name: "Valid config",
+			config: &configapi.SaturationDetector{
+				QueueDepthThreshold:       10,
+				KVCacheUtilThreshold:      0.8,
+				MetricsStalenessThreshold: metav1.Duration{Duration: 100 * time.Millisecond},
+			},
+			expectedConfig: saturationdetector.Config{
+				QueueDepthThreshold:       10,
+				KVCacheUtilThreshold:      0.8,
+				MetricsStalenessThreshold: 100 * time.Millisecond,
+			},
+		},
+		{
+			name: "invalid thresholds, fallback to default",
+			config: &configapi.SaturationDetector{
+				QueueDepthThreshold:       -1,
+				KVCacheUtilThreshold:      -5.0,
+				MetricsStalenessThreshold: metav1.Duration{Duration: 0 * time.Second},
+			},
+			expectedConfig: saturationdetector.Config{
+				QueueDepthThreshold:       saturationdetector.DefaultQueueDepthThreshold,
+				KVCacheUtilThreshold:      saturationdetector.DefaultKVCacheUtilThreshold,
+				MetricsStalenessThreshold: saturationdetector.DefaultMetricsStalenessThreshold,
+			},
+		},
+		{
+			name: "kv cache threshold above range, fallback to default",
+			config: &configapi.SaturationDetector{
+				QueueDepthThreshold:       10,
+				KVCacheUtilThreshold:      1.5,
+				MetricsStalenessThreshold: metav1.Duration{Duration: 100 * time.Millisecond},
+			},
+			expectedConfig: saturationdetector.Config{
+				QueueDepthThreshold:       10,
+				KVCacheUtilThreshold:      saturationdetector.DefaultKVCacheUtilThreshold,
+				MetricsStalenessThreshold: 100 * time.Millisecond,
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			// validate configuration values are loaded from configuration struct properly, including the use of default values when provided value is invalid.
+			sdConfig := loadSaturationDetectorConfig(test.config)
+			if diff := cmp.Diff(test.expectedConfig, sdConfig); diff != "" {
+				t.Errorf("Unexpected output (-want +got): %v", diff)
+			}
+		})
+	}
+}
+
 // The following multi-line string constants, cause false positive lint errors (dupword)
 
 // valid configuration
@@ -473,6 +549,10 @@ schedulingProfiles:
   - pluginRef: test-two
     weight: 50
   - pluginRef: testPicker
+featureGates:
+  enableDataLayer: true
+saturationDetector:
+  metricsStalenessThreshold: 150ms
 `
 
 // success with missing scheduling profiles
