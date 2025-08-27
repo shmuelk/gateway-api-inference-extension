@@ -29,6 +29,7 @@ import (
 	configapi "sigs.k8s.io/gateway-api-inference-extension/apix/config/v1alpha1"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/config"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/plugins"
+	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/saturationdetector"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/scheduling"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/scheduling/framework"
 )
@@ -69,6 +70,8 @@ func LoadConfig(configBytes []byte, handle plugins.Handle, logger logr.Logger) (
 	if err != nil {
 		return nil, err
 	}
+	config.FeatureConfig = loadFeatureConfig(rawConfig.FeatureGates)
+	config.SaturationDetectorConfig = loadSaturationDetectorConfig(rawConfig.SaturationDetector)
 
 	return config, nil
 }
@@ -114,6 +117,34 @@ func loadSchedulerConfig(configProfiles []configapi.SchedulingProfile, handle pl
 	}
 
 	return scheduling.NewSchedulerConfig(profileHandler, profiles), nil
+}
+
+func loadFeatureConfig(featureGates *configapi.FeatureGates) config.FeatureConfig {
+	featureConfig := config.FeatureConfig{}
+
+	featureConfig.EnableDataLayer = featureGates.EnableDataLayer
+	featureConfig.EnableFlowControl = featureGates.EnableFlowControl
+
+	return featureConfig
+}
+
+func loadSaturationDetectorConfig(sd *configapi.SaturationDetector) saturationdetector.Config {
+	sdConfig := saturationdetector.Config{}
+
+	sdConfig.QueueDepthThreshold = sd.QueueDepthThreshold
+	if sdConfig.QueueDepthThreshold <= 0 {
+		sdConfig.QueueDepthThreshold = saturationdetector.DefaultQueueDepthThreshold
+	}
+	sdConfig.KVCacheUtilThreshold = sd.KVCacheUtilThreshold
+	if sdConfig.KVCacheUtilThreshold <= 0.0 || sdConfig.KVCacheUtilThreshold >= 1.0 {
+		sdConfig.KVCacheUtilThreshold = saturationdetector.DefaultKVCacheUtilThreshold
+	}
+	sdConfig.MetricsStalenessThreshold = sd.MetricsStalenessThreshold.Duration
+	if sdConfig.MetricsStalenessThreshold <= 0.0 {
+		sdConfig.MetricsStalenessThreshold = saturationdetector.DefaultMetricsStalenessThreshold
+	}
+
+	return sdConfig
 }
 
 func instantiatePlugins(configuredPlugins []configapi.PluginSpec, handle plugins.Handle) error {
