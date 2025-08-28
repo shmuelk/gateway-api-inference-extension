@@ -24,15 +24,6 @@ import (
 // Config is the configuration loaded from the text based configuration
 type Config struct {
 	SchedulerConfig          *scheduling.SchedulerConfig
-	FeatureConfig            FeatureConfig
+	FeatureConfig            map[string]bool
 	SaturationDetectorConfig saturationdetector.Config
-}
-
-// FeatureConfig contains a set of flags for enabling various experimental fetures/APIs in the EPP
-type FeatureConfig struct {
-	// EnableDataLayer if true, indicates that the experimental DataLayer APIs are enabled
-	EnableDataLayer bool
-
-	// EnableFlowControl if true, indicates that the experimental FlowControl feature is enabled.
-	EnableFlowControl bool
 }
