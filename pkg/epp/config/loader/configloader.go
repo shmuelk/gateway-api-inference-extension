@@ -36,6 +36,8 @@ import (
 
 var scheme = runtime.NewScheme()
 
+var registeredFeatureGates = map[string]struct{}{}
+
 func init() {
 	utilruntime.Must(configapi.Install(scheme))
 }
@@ -207,3 +209,9 @@ func validateSchedulingProfiles(config *configapi.EndpointPickerConfig) error {
 	}
 	return nil
 }
+
+// RegisterFeatureGate registers feature gate keys for validation
+func RegisterFeatureGate(gate string) {
+	registeredFeatureGates[gate] = struct{}{}
+}
+

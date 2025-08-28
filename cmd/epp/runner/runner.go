@@ -317,6 +317,8 @@ func (r *Runner) parseConfiguration(ctx context.Context) (*config.Config, error)
 		}
 	}
 
+	loader.RegisterFeatureGate(datalayer.FeatureGate)
+
 	r.registerInTreePlugins()
 	handle := plugins.NewEppHandle(ctx)
 	cfg, err := loader.LoadConfig(configBytes, handle, logger)
