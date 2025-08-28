@@ -132,26 +132,22 @@ func (sp SchedulingPlugin) String() string {
 }
 
 // FeatureGates is a set of flags that enable various experimental features with the EPP
-type FeatureGates struct {
-	// +optional
-	// EnableDataLayer If present and true enables the experimental Datalayer APIs.
-	// The Datalayer APIswill be disabled if EnableDataLayer is not present in the
-	// configuration or its value is false.
-	EnableDataLayer bool `json:"enableDataLayer,omitempty"`
-
-	// +optional
-	// EnableFlowControl If present and true enables the experimental FlowControl feature.
-	// The FlowControl feature will be disabled if EnableFlowControl is not in the
-	// configuration or its value is false.
-	EnableFlowControl bool `json:"enableFlowControl,omitempty"`
-}
+type FeatureGates map[string]bool
 
 func (fg *FeatureGates) String() string {
 	if fg == nil {
 		return "{}"
 	}
-	return fmt.Sprintf("{EnableDataLayer: %t, EnableFlowControl: %t}",
-		fg.EnableDataLayer, fg.EnableFlowControl)
+
+	result := ""
+	for key, value := range *fg {
+		result += fmt.Sprintf("%s:%v,", key, value)
+	}
+
+	if len(result) > 0 {
+		result = result[:len(result)-1]
+	}
+	return "{" + result + "}"
 }
 
 // SaturationDetector
