@@ -140,7 +140,7 @@ type FeatureGates struct {
 	EnableDataLayer bool `json:"enableDataLayer,omitempty"`
 
 	// +optional
-	// EnableFlowControl is present and true enables the experimental FlowControl feature.
+	// EnableFlowControl If present and true enables the experimental FlowControl feature.
 	// The FlowControl feature will be disabled if EnableFlowControl is not in the
 	// configuration or its value is false.
 	EnableFlowControl bool `json:"enableFlowControl,omitempty"`
