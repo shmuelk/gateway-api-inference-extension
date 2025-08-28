@@ -20,6 +20,6 @@ schedulingProfiles:
     weight: 50
   - pluginRef: testPicker
 featureGates:
-  enableDataLayer: true
+  dataLayer: true
 saturationDetector:
   metricsStalenessThreshold: 150ms

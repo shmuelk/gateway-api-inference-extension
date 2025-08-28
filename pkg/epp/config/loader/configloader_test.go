@@ -29,6 +29,7 @@ import (
 
 	configapi "sigs.k8s.io/gateway-api-inference-extension/apix/config/v1alpha1"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/config"
+	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/datalayer"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/plugins"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/saturationdetector"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/scheduling/framework"
@@ -99,7 +100,7 @@ func TestLoadRawConfiguration(t *testing.T) {
 				},
 			},
 		},
-		FeatureGates: &configapi.FeatureGates{EnableDataLayer: true},
+		FeatureGates: &configapi.FeatureGates{datalayer.FeatureGate: true},
 		SaturationDetector: &configapi.SaturationDetector{
 			MetricsStalenessThreshold: metav1.Duration{Duration: 150 * time.Millisecond},
 		},
@@ -205,7 +206,7 @@ func TestLoadRawConfigurationWithDefaults(t *testing.T) {
 				},
 			},
 		},
-		FeatureGates: &configapi.FeatureGates{EnableDataLayer: true},
+		FeatureGates: &configapi.FeatureGates{datalayer.FeatureGate: true},
 		SaturationDetector: &configapi.SaturationDetector{
 			QueueDepthThreshold:       saturationdetector.DefaultQueueDepthThreshold,
 			KVCacheUtilThreshold:      saturationdetector.DefaultKVCacheUtilThreshold,
@@ -364,6 +365,7 @@ func checkError(t *testing.T, function string, test testStruct, err error) {
 }
 
 func TestInstantiatePlugins(t *testing.T) {
+	registerNeededFeatureGates()
 	handle := utils.NewTestHandle(context.Background())
 	_, err := LoadConfig([]byte(successConfigText), handle, logging.NewTestLogger())
 	if err != nil {
@@ -438,8 +440,14 @@ func TestLoadConfig(t *testing.T) {
 			configText: errorNoProfileHandlersText,
 			wantErr:    true,
 		},
+		{
+			name:       "errorUnknownFeatureGate",
+			configText: errorUnknownFeatureGateText,
+			wantErr:    true,
+		},
 	}
 
+	registerNeededFeatureGates()
 	registerNeededPlgugins()
 
 	logger := logging.NewTestLogger()
@@ -455,6 +463,10 @@ func TestLoadConfig(t *testing.T) {
 			t.Errorf("LoadConfig did not return an expected error (%s)", test.name)
 		}
 	}
+}
+
+func registerNeededFeatureGates() {
+	RegisterFeatureGate(datalayer.FeatureGate)
 }
 
 func registerNeededPlgugins() {
@@ -550,7 +562,7 @@ schedulingProfiles:
     weight: 50
   - pluginRef: testPicker
 featureGates:
-  enableDataLayer: true
+  dataLayer: true
 saturationDetector:
   metricsStalenessThreshold: 150ms
 `
@@ -718,6 +730,21 @@ schedulingProfiles:
   - pluginRef: test2
 `
 
+// error with an unknown feature gate
+//
+//nolint:dupword
+const errorUnknownFeatureGateText = `
+apiVersion: inference.networking.x-k8s.io/v1alpha1
+kind: EndpointPickerConfig
+plugins:
+- name: test1
+  type: test-one
+  parameters:
+    threshold: 10
+featureGates:
+  qwerty: true
+`
+
 // compile-time type validation
 var _ framework.Filter = &test1{}
 
@@ -857,6 +884,8 @@ schedulingProfiles:
   - pluginRef: prefixCacheScorer
     weight: 50
   - pluginRef: maxScorePicker
+featureGates:
+  dataLayer: true
 `
 
 // valid configuration, with default weight for scorer
