@@ -100,7 +100,7 @@ func TestLoadRawConfiguration(t *testing.T) {
 				},
 			},
 		},
-		FeatureGates: &configapi.FeatureGates{datalayer.FeatureGate: true},
+		FeatureGates: configapi.FeatureGates{datalayer.FeatureGate: true},
 		SaturationDetector: &configapi.SaturationDetector{
 			MetricsStalenessThreshold: metav1.Duration{Duration: 150 * time.Millisecond},
 		},
@@ -206,7 +206,7 @@ func TestLoadRawConfigurationWithDefaults(t *testing.T) {
 				},
 			},
 		},
-		FeatureGates: &configapi.FeatureGates{datalayer.FeatureGate: true},
+		FeatureGates: configapi.FeatureGates{datalayer.FeatureGate: true},
 		SaturationDetector: &configapi.SaturationDetector{
 			QueueDepthThreshold:       saturationdetector.DefaultQueueDepthThreshold,
 			KVCacheUtilThreshold:      saturationdetector.DefaultKVCacheUtilThreshold,
@@ -247,7 +247,7 @@ func TestLoadRawConfigurationWithDefaults(t *testing.T) {
 				},
 			},
 		},
-		FeatureGates: &configapi.FeatureGates{},
+		FeatureGates: configapi.FeatureGates{},
 		SaturationDetector: &configapi.SaturationDetector{
 			QueueDepthThreshold:       saturationdetector.DefaultQueueDepthThreshold,
 			KVCacheUtilThreshold:      saturationdetector.DefaultKVCacheUtilThreshold,
