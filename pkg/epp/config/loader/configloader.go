@@ -51,6 +51,10 @@ func LoadConfig(configBytes []byte, handle plugins.Handle, logger logr.Logger) (
 
 	logger.Info("Loaded configuration", "config", rawConfig)
 
+	if err = validateFeatureGates(rawConfig.FeatureGates); err != nil {
+		return nil, fmt.Errorf("failed to validate feature gates - %w", err)
+	}
+
 	setDefaultsPhaseOne(rawConfig)
 
 	// instantiate loaded plugins
@@ -121,11 +125,18 @@ func loadSchedulerConfig(configProfiles []configapi.SchedulingProfile, handle pl
 	return scheduling.NewSchedulerConfig(profileHandler, profiles), nil
 }
 
-func loadFeatureConfig(featureGates *configapi.FeatureGates) config.FeatureConfig {
-	featureConfig := config.FeatureConfig{}
+func loadFeatureConfig(featureGates *configapi.FeatureGates) map[string]bool {
+	featureConfig := map[string]bool{}
 
-	featureConfig.EnableDataLayer = featureGates.EnableDataLayer
-	featureConfig.EnableFlowControl = featureGates.EnableFlowControl
+	for gate := range registeredFeatureGates {
+		featureConfig[gate] = false
+	}
+
+	if featureGates != nil {
+		for gate, enabled := range *featureGates {
+			featureConfig[gate] = enabled
+		}
+	}
 
 	return featureConfig
 }
@@ -215,3 +226,16 @@ func RegisterFeatureGate(gate string) {
 	registeredFeatureGates[gate] = struct{}{}
 }
 
+func validateFeatureGates(fg *configapi.FeatureGates) error {
+	if fg == nil {
+		return nil
+	}
+
+	for gate := range *fg {
+		if _, ok := registeredFeatureGates[gate]; !ok {
+			return errors.New(gate + " is an unregistered Feature Gate")
+		}
+	}
+
+	return nil
+}
