@@ -55,7 +55,7 @@ func setDefaultsPhaseOne(cfg *configapi.EndpointPickerConfig) {
 
 	// If no feature gates were specified, provide a default FeatureGates struct
 	if cfg.FeatureGates == nil {
-		cfg.FeatureGates = &configapi.FeatureGates{}
+		cfg.FeatureGates = configapi.FeatureGates{}
 	}
 
 	// If the SaturationDetector configuration wasn't specified setup a default one

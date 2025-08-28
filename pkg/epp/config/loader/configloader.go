@@ -125,7 +125,7 @@ func loadSchedulerConfig(configProfiles []configapi.SchedulingProfile, handle pl
 	return scheduling.NewSchedulerConfig(profileHandler, profiles), nil
 }
 
-func loadFeatureConfig(featureGates *configapi.FeatureGates) map[string]bool {
+func loadFeatureConfig(featureGates configapi.FeatureGates) map[string]bool {
 	featureConfig := map[string]bool{}
 
 	for gate := range registeredFeatureGates {
@@ -133,7 +133,7 @@ func loadFeatureConfig(featureGates *configapi.FeatureGates) map[string]bool {
 	}
 
 	if featureGates != nil {
-		for gate, enabled := range *featureGates {
+		for gate, enabled := range featureGates {
 			featureConfig[gate] = enabled
 		}
 	}
@@ -226,12 +226,12 @@ func RegisterFeatureGate(gate string) {
 	registeredFeatureGates[gate] = struct{}{}
 }
 
-func validateFeatureGates(fg *configapi.FeatureGates) error {
+func validateFeatureGates(fg configapi.FeatureGates) error {
 	if fg == nil {
 		return nil
 	}
 
-	for gate := range *fg {
+	for gate := range fg {
 		if _, ok := registeredFeatureGates[gate]; !ok {
 			return errors.New(gate + " is an unregistered Feature Gate")
 		}
