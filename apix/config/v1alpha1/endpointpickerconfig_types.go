@@ -43,7 +43,7 @@ type EndpointPickerConfig struct {
 	// +optional
 	// FeatureGates is a set of flags that enable various experimental features with the EPP.
 	// If omitted non of these experimental features will be enabled.
-	FeatureGates *FeatureGates `json:"featureGates,omitempty"`
+	FeatureGates FeatureGates `json:"featureGates,omitempty"`
 
 	// +optional
 	// SaturationDetector when present specifies the configuration of the
@@ -134,13 +134,13 @@ func (sp SchedulingPlugin) String() string {
 // FeatureGates is a set of flags that enable various experimental features with the EPP
 type FeatureGates map[string]bool
 
-func (fg *FeatureGates) String() string {
+func (fg FeatureGates) String() string {
 	if fg == nil {
 		return "{}"
 	}
 
 	result := ""
-	for key, value := range *fg {
+	for key, value := range fg {
 		result += fmt.Sprintf("%s:%v,", key, value)
 	}
 

@@ -45,13 +45,9 @@ func (in *EndpointPickerConfig) DeepCopyInto(out *EndpointPickerConfig) {
 	}
 	if in.FeatureGates != nil {
 		in, out := &in.FeatureGates, &out.FeatureGates
-		*out = new(map[string]bool)
-		if **in != nil {
-			in, out := *in, *out
-			*out = make(map[string]bool, len(*in))
-			for key, val := range *in {
-				(*out)[key] = val
-			}
+		*out = make(FeatureGates, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
 		}
 	}
 	if in.SaturationDetector != nil {
