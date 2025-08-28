@@ -164,7 +164,7 @@ func (r *Runner) Run(ctx context.Context) error {
 	}
 
 	// --- Setup Datastore ---
-	epf, err := r.setupMetricsCollection(setupLog, eppConfig.FeatureConfig.EnableDataLayer)
+	epf, err := r.setupMetricsCollection(setupLog, eppConfig.FeatureConfig[datalayer.FeatureGate])
 	if err != nil {
 		return err
 	}
@@ -257,7 +257,7 @@ func (r *Runner) Run(ctx context.Context) error {
 		MetricsStalenessThreshold:        *metricsStalenessThreshold,
 		Director:                         director,
 		SaturationDetector:               saturationDetector,
-		UseExperimentalDatalayerV2:       eppConfig.FeatureConfig.EnableDataLayer, // pluggable data layer feature flag
+		UseExperimentalDatalayerV2:       eppConfig.FeatureConfig[datalayer.FeatureGate], // pluggable data layer feature flag
 	}
 	if err := serverRunner.SetupWithManager(ctx, mgr); err != nil {
 		setupLog.Error(err, "Failed to setup EPP controllers")
