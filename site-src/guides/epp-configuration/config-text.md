@@ -330,15 +330,14 @@ The Feature Gates section has the follwoing form:
 
 ```yaml
 featureGates:
-  enableDataLayer: true
-  enableFlowControl: false
+- dataLayer
+- flowControl
 ```
 
-Each sub-field of the Feature Gates section enables one experimental feature. The sub-fields are:
+The Feature Gates section is an array of flags, each of which enables one experimental feature.
+The available values for these elements are:
 
-- `enableDataLayer` which, if present and has a value of true, enables the experimental Datalayer APIs.
-- `enableFlowControl` which, if present and has a value of true, enables the experimental FlowControl
-feature.
+- `dataLayer` which, if present, enables the experimental Datalayer APIs.
+- `flowControl` which, if present, enables the experimental FlowControl feature.
 
-In all cases if the sub-field isn't present or has a value of false, that experimental feature will
-be disabled.
+In all cases if the appropriate element isn't present, that experimental feature will be disabled.
