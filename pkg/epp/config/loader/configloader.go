@@ -132,8 +132,8 @@ func loadFeatureConfig(featureGates configapi.FeatureGates) map[string]bool {
 		featureConfig[gate] = false
 	}
 
-	for gate, enabled := range featureGates {
-		featureConfig[gate] = enabled
+	for _, gate := range featureGates {
+		featureConfig[gate] = true
 	}
 
 	return featureConfig
