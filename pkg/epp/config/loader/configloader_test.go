@@ -100,7 +100,7 @@ func TestLoadRawConfiguration(t *testing.T) {
 				},
 			},
 		},
-		FeatureGates: configapi.FeatureGates{datalayer.FeatureGate: true},
+		FeatureGates: configapi.FeatureGates{datalayer.FeatureGate},
 		SaturationDetector: &configapi.SaturationDetector{
 			MetricsStalenessThreshold: metav1.Duration{Duration: 150 * time.Millisecond},
 		},
@@ -206,7 +206,7 @@ func TestLoadRawConfigurationWithDefaults(t *testing.T) {
 				},
 			},
 		},
-		FeatureGates: configapi.FeatureGates{datalayer.FeatureGate: true},
+		FeatureGates: configapi.FeatureGates{datalayer.FeatureGate},
 		SaturationDetector: &configapi.SaturationDetector{
 			QueueDepthThreshold:       saturationdetector.DefaultQueueDepthThreshold,
 			KVCacheUtilThreshold:      saturationdetector.DefaultKVCacheUtilThreshold,
@@ -563,7 +563,7 @@ schedulingProfiles:
     weight: 50
   - pluginRef: testPicker
 featureGates:
-  dataLayer: true
+- dataLayer
 saturationDetector:
   metricsStalenessThreshold: 150ms
 `
@@ -743,7 +743,7 @@ plugins:
   parameters:
     threshold: 10
 featureGates:
-  qwerty: true
+- qwerty
 `
 
 // compile-time type validation
@@ -886,7 +886,7 @@ schedulingProfiles:
     weight: 50
   - pluginRef: maxScorePicker
 featureGates:
-  dataLayer: true
+- dataLayer
 `
 
 // valid configuration, with default weight for scorer
