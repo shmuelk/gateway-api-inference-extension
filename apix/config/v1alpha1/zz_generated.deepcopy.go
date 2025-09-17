@@ -46,9 +46,7 @@ func (in *EndpointPickerConfig) DeepCopyInto(out *EndpointPickerConfig) {
 	if in.FeatureGates != nil {
 		in, out := &in.FeatureGates, &out.FeatureGates
 		*out = make(FeatureGates, len(*in))
-		for key, val := range *in {
-			(*out)[key] = val
-		}
+		copy(*out, *in)
 	}
 	if in.SaturationDetector != nil {
 		in, out := &in.SaturationDetector, &out.SaturationDetector
@@ -80,9 +78,7 @@ func (in FeatureGates) DeepCopyInto(out *FeatureGates) {
 	{
 		in := &in
 		*out = make(FeatureGates, len(*in))
-		for key, val := range *in {
-			(*out)[key] = val
-		}
+		copy(*out, *in)
 	}
 }
 

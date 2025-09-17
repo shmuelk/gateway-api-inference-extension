@@ -132,7 +132,7 @@ func (sp SchedulingPlugin) String() string {
 }
 
 // FeatureGates is a set of flags that enable various experimental features with the EPP
-type FeatureGates map[string]bool
+type FeatureGates []string
 
 func (fg FeatureGates) String() string {
 	if fg == nil {
@@ -140,8 +140,8 @@ func (fg FeatureGates) String() string {
 	}
 
 	result := ""
-	for key, value := range fg {
-		result += fmt.Sprintf("%s:%v,", key, value)
+	for _, gate := range fg {
+		result += gate + ","
 	}
 
 	if len(result) > 0 {
