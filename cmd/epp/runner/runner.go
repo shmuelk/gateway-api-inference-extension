@@ -244,7 +244,7 @@ func (r *Runner) Run(ctx context.Context) error {
 		runtime.SetBlockProfileRate(1)
 	}
 
-	err = r.parsePluginsConfiguration(ctx)
+	err = r.parsePluginsConfiguration(ctx, datastore)
 	if err != nil {
 		setupLog.Error(err, "Failed to parse plugins configuration")
 		return err
@@ -321,7 +321,7 @@ func (r *Runner) registerInTreePlugins() {
 	plugins.Register(testfilter.HeaderBasedTestingFilterType, testfilter.HeaderBasedTestingFilterFactory)
 }
 
-func (r *Runner) parsePluginsConfiguration(ctx context.Context) error {
+func (r *Runner) parsePluginsConfiguration(ctx context.Context, datastore datastore.Datastore) error {
 	if *configText == "" && *configFile == "" {
 		return nil // configuring through code, not through file
 	}
@@ -340,7 +340,7 @@ func (r *Runner) parsePluginsConfiguration(ctx context.Context) error {
 	}
 
 	r.registerInTreePlugins()
-	handle := plugins.NewEppHandle(ctx)
+	handle := plugins.NewEppHandle(ctx, datastore)
 	config, err := loader.LoadConfig(configBytes, handle, logger)
 	if err != nil {
 		return fmt.Errorf("failed to load the configuration - %w", err)
