@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -46,6 +47,8 @@ const (
 	test1Type              = "test-one"
 	test2Type              = "test-two"
 	testPickerType         = "test-picker"
+	testSourceType         = "test-source"
+	testExtractorType      = "test-extractor"
 )
 
 type testStruct struct {
@@ -82,6 +85,12 @@ func TestLoadRawConfiguration(t *testing.T) {
 				Name: "testPicker",
 				Type: testPickerType,
 			},
+			{
+				Type: testSourceType,
+			},
+			{
+				Type: testExtractorType,
+			},
 		},
 		SchedulingProfiles: []configapi.SchedulingProfile{
 			{
@@ -97,6 +106,14 @@ func TestLoadRawConfiguration(t *testing.T) {
 					{
 						PluginRef: "testPicker",
 					},
+				},
+			},
+		},
+		Data: &configapi.DataLayerConfig{
+			Sources: []configapi.DataLayerSource{
+				{
+					PluginRef:  "test-source",
+					Extractors: []string{"test-extractor"},
 				},
 			},
 		},
@@ -188,6 +205,14 @@ func TestLoadRawConfigurationWithDefaults(t *testing.T) {
 				Name: "testPicker",
 				Type: testPickerType,
 			},
+			{
+				Name: testSourceType,
+				Type: testSourceType,
+			},
+			{
+				Name: testExtractorType,
+				Type: testExtractorType,
+			},
 		},
 		SchedulingProfiles: []configapi.SchedulingProfile{
 			{
@@ -203,6 +228,14 @@ func TestLoadRawConfigurationWithDefaults(t *testing.T) {
 					{
 						PluginRef: "testPicker",
 					},
+				},
+			},
+		},
+		Data: &configapi.DataLayerConfig{
+			Sources: []configapi.DataLayerSource{
+				{
+					PluginRef:  "test-source",
+					Extractors: []string{"test-extractor"},
 				},
 			},
 		},
@@ -358,7 +391,7 @@ func checkError(t *testing.T, function string, test testStruct, err error) {
 		if !test.wantErr {
 			t.Fatalf("In test '%s' %s returned unexpected error: %v, want %v", test.name, function, err, test.wantErr)
 		}
-		t.Logf("error was %s", err)
+		t.Logf("error in %s was %s", test.name, err)
 	} else if test.wantErr {
 		t.Fatalf("In test %s %s did not return an expected error", test.name, function)
 	}
@@ -457,6 +490,21 @@ func TestLoadConfig(t *testing.T) {
 		{
 			name:       "errorUnknownFeatureGate",
 			configText: errorUnknownFeatureGateText,
+			wantErr:    true,
+		},
+		{
+			name:       "errorMissingDataConfig",
+			configText: errorMissingDataConfigText,
+			wantErr:    true,
+		},
+		{
+			name:       "errorBadSourceReference",
+			configText: errorBadSourceReferenceText,
+			wantErr:    true,
+		},
+		{
+			name:       "errorBadExtractorReference",
+			configText: errorBadExtractorReferenceText,
 			wantErr:    true,
 		},
 	}
@@ -577,6 +625,8 @@ plugins:
     blockSize: 32
 - name: testPicker
   type: test-picker
+- type: test-source
+- type: test-extractor
 schedulingProfiles:
 - name: default
   plugins:
@@ -584,6 +634,11 @@ schedulingProfiles:
   - pluginRef: test-two
     weight: 50
   - pluginRef: testPicker
+data:
+  sources:
+  - pluginRef: test-source
+    extractors:
+    - test-extractor
 featureGates:
 - dataLayer
 saturationDetector:
@@ -768,6 +823,72 @@ featureGates:
 - qwerty
 `
 
+// datalayer enabled without config
+//
+//nolint:dupword
+const errorMissingDataConfigText = `
+apiVersion: inference.networking.x-k8s.io/v1alpha1
+kind: EndpointPickerConfig
+plugins:
+- name: test1
+  type: test-one
+  parameters:
+    threshold: 10
+schedulingProfiles:
+- name: default
+  plugins:
+  - pluginRef: test1
+featureGates:
+- dataLayer
+`
+
+// error bad DataSource plugin reference
+//
+//nolint:dupword
+const errorBadSourceReferenceText = `
+apiVersion: inference.networking.x-k8s.io/v1alpha1
+kind: EndpointPickerConfig
+plugins:
+- name: test1
+  type: test-one
+  parameters:
+    threshold: 10
+schedulingProfiles:
+- name: default
+  plugins:
+  - pluginRef: test1
+data:
+  sources:
+  - pluginRef: test-one
+featureGates:
+- dataLayer
+`
+
+// error bad Extractor plugin reference
+//
+//nolint:dupword
+const errorBadExtractorReferenceText = `
+apiVersion: inference.networking.x-k8s.io/v1alpha1
+kind: EndpointPickerConfig
+plugins:
+- name: test1
+  type: test-one
+  parameters:
+    threshold: 10
+- type: test-source
+schedulingProfiles:
+- name: default
+  plugins:
+  - pluginRef: test1
+data:
+  sources:
+  - pluginRef: test-source
+    extractors:
+    - test-one
+featureGates:
+- dataLayer
+`
+
 // compile-time type validation
 var _ framework.Filter = &test1{}
 
@@ -858,6 +979,60 @@ func (p *testProfileHandler) ProcessResults(_ context.Context, _ *types.CycleSta
 	return nil, nil
 }
 
+// compile-time type validation
+var _ datalayer.DataSource = &testSource{}
+
+type testSource struct {
+	typedName plugins.TypedName
+}
+
+func newTestSource() *testSource {
+	return &testSource{
+		typedName: plugins.TypedName{Type: testSourceType, Name: "test-source"},
+	}
+}
+
+func (s *testSource) TypedName() plugins.TypedName {
+	return s.typedName
+}
+
+func (s *testSource) AddExtractor(_ datalayer.Extractor) error {
+	return nil
+}
+
+func (s *testSource) Collect(ctx context.Context, ep datalayer.Endpoint) error {
+	return nil
+}
+
+func (s *testSource) Extractors() []string {
+	return []string{}
+}
+
+// compile-time type validation
+var _ datalayer.Extractor = &testExtractor{}
+
+type testExtractor struct {
+	typedName plugins.TypedName
+}
+
+func newTestExtractor() *testExtractor {
+	return &testExtractor{
+		typedName: plugins.TypedName{Type: testExtractorType, Name: "test-extractor"},
+	}
+}
+
+func (e *testExtractor) TypedName() plugins.TypedName {
+	return e.typedName
+}
+
+func (e *testExtractor) ExpectedInputType() reflect.Type {
+	return reflect.TypeOf("")
+}
+
+func (e *testExtractor) Extract(ctx context.Context, data any, ep datalayer.Endpoint) error {
+	return nil
+}
+
 func registerTestPlugins() {
 	plugins.Register(test1Type,
 		func(_ string, parameters json.RawMessage, _ plugins.Handle) (plugins.Plugin, error) {
@@ -882,6 +1057,18 @@ func registerTestPlugins() {
 	plugins.Register(testProfileHandlerType,
 		func(_ string, _ json.RawMessage, _ plugins.Handle) (plugins.Plugin, error) {
 			return newTestProfileHandler(), nil
+		},
+	)
+
+	plugins.Register(testSourceType,
+		func(_ string, _ json.RawMessage, _ plugins.Handle) (plugins.Plugin, error) {
+			return newTestSource(), nil
+		},
+	)
+
+	plugins.Register(testExtractorType,
+		func(_ string, _ json.RawMessage, _ plugins.Handle) (plugins.Plugin, error) {
+			return newTestExtractor(), nil
 		},
 	)
 }
