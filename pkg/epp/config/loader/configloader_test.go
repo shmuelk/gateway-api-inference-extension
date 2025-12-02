@@ -112,8 +112,12 @@ func TestLoadRawConfiguration(t *testing.T) {
 		Data: &configapi.DataLayerConfig{
 			Sources: []configapi.DataLayerSource{
 				{
-					PluginRef:  "test-source",
-					Extractors: []string{"test-extractor"},
+					PluginRef: "test-source",
+					Extractors: []configapi.DataLayerExtractor{
+						{
+							PluginRef: "test-extractor",
+						},
+					},
 				},
 			},
 		},
@@ -234,8 +238,12 @@ func TestLoadRawConfigurationWithDefaults(t *testing.T) {
 		Data: &configapi.DataLayerConfig{
 			Sources: []configapi.DataLayerSource{
 				{
-					PluginRef:  "test-source",
-					Extractors: []string{"test-extractor"},
+					PluginRef: "test-source",
+					Extractors: []configapi.DataLayerExtractor{
+						{
+							PluginRef: "test-extractor",
+						},
+					},
 				},
 			},
 		},
@@ -638,7 +646,7 @@ data:
   sources:
   - pluginRef: test-source
     extractors:
-    - test-extractor
+    - pluginRef: test-extractor
 featureGates:
 - dataLayer
 saturationDetector:
@@ -884,7 +892,7 @@ data:
   sources:
   - pluginRef: test-source
     extractors:
-    - test-one
+    - pluginRef: test-one
 featureGates:
 - dataLayer
 `
