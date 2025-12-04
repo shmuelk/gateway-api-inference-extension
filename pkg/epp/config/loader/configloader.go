@@ -179,6 +179,9 @@ func loadSaturationDetectorConfig(sd *configapi.SaturationDetector) *saturationd
 func loadDataLayerConfig(rawDataConfig *configapi.DataLayerConfig, rawFeatureGates configapi.FeatureGates, handle plugins.Handle) (*datalayer.Config, error) {
 	featureGates := loadFeatureConfig(rawFeatureGates)
 	if !featureGates[datalayer.FeatureGate] {
+		if rawDataConfig != nil {
+			return nil, errors.New("the Datalayer has not been enabled, but you specified a configuration for it")
+		}
 		return nil, nil
 	}
 
