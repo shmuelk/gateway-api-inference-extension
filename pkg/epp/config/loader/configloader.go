@@ -183,7 +183,7 @@ func loadDataLayerConfig(rawDataConfig *configapi.DataLayerConfig, rawFeatureGat
 	}
 
 	if rawDataConfig == nil {
-		return nil, errors.New("the V2 Datalayer has been enabled. You must specify the Data section in the configuration")
+		return nil, errors.New("the Datalayer has been enabled. You must specify the Data section in the configuration")
 	}
 
 	dataConfig := datalayer.Config{
