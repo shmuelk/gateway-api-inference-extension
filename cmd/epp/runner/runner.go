@@ -22,16 +22,16 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"regexp"
+	"runtime"
 	"sync/atomic"
 	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spf13/pflag"
-	"google.golang.org/grpc"
-	healthPb "google.golang.org/grpc/health/grpc_health_v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -43,7 +43,6 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	configapi "sigs.k8s.io/gateway-api-inference-extension/apix/config/v1alpha1"
-	"sigs.k8s.io/gateway-api-inference-extension/internal/runnable"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/common"
 	logutil "sigs.k8s.io/gateway-api-inference-extension/pkg/common/observability/logging"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/common/observability/profiling"
@@ -363,38 +362,22 @@ func (r *Runner) setup(ctx context.Context, cfg *rest.Config, opts *runserver.Op
 
 	director := requestcontrol.NewDirectorWithConfig(ds, scheduler, admissionController, locator, r.requestControlConfig)
 
-	// --- Setup ExtProc Server Runner ---
-	serverRunner := &runserver.ExtProcServerRunner{
-		GrpcPort:                         opts.GRPCPort,
-		GKNN:                             *gknn,
-		Datastore:                        ds,
-		ControllerCfg:                    controllerCfg,
-		SecureServing:                    opts.SecureServing,
-		HealthChecking:                   opts.HealthChecking,
-		CertPath:                         opts.CertPath,
-		EnableCertReload:                 opts.EnableCertReload,
-		RefreshPrometheusMetricsInterval: opts.RefreshPrometheusMetricsInterval,
-		MetricsStalenessThreshold:        opts.MetricsStalenessThreshold,
-		Director:                         director,
-		SaturationDetector:               saturationDetector,
-		UseExperimentalDatalayerV2:       r.featureGates[datalayer.ExperimentalDatalayerFeatureGate], // pluggable data layer feature flag
-	}
-
-	if err := serverRunner.SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "Failed to setup EPP controllers")
-		return nil, nil, err
-	}
-
 	// --- Add Runnables to Manager ---
-	// Register health server.
-	if err := registerHealthServer(mgr, ctrl.Log.WithName("health"), ds, opts.GRPCHealthPort, isLeader, opts.EnableLeaderElection); err != nil {
+	if err := r.helper.CreateAndRegisterServer(ds, opts, *gknn, director, saturationDetector,
+		r.featureGates[datalayer.ExperimentalDatalayerFeatureGate], mgr, setupLog); err != nil {
 		return nil, nil, err
 	}
 
-	// Register ext-proc server.
-	if err := registerExtProcServer(mgr, serverRunner, ctrl.Log.WithName("ext-proc")); err != nil {
+	// Register health server.
+	if err = r.helper.RegisterHealthServer(mgr, setupLog, ds, opts.GRPCHealthPort, isLeader, opts.EnableLeaderElection); err != nil {
 		return nil, nil, err
 	}
+
+	if err := runserver.SetupWithManager(controllerCfg, ds, *gknn, mgr); err != nil {
+		setupLog.Error(err, "Failed to setup controllers")
+		return nil, nil, err
+	}
+
 	return mgr, ds, nil
 }
 
@@ -639,30 +622,44 @@ func (r *Runner) setupMetricsCollection(enableNewMetrics bool, opts *runserver.O
 	return backendmetrics.NewPodMetricsFactory(pmc, opts.RefreshMetricsInterval)
 }
 
-// registerExtProcServer adds the ExtProcServerRunner as a Runnable to the manager.
-func registerExtProcServer(mgr manager.Manager, runner *runserver.ExtProcServerRunner, logger logr.Logger) error {
-	if err := mgr.Add(runner.AsRunnable(logger)); err != nil {
-		setupLog.Error(err, "Failed to register ext-proc gRPC server runnable")
-		return err
+func verifyMetricMapping(mapping backendmetrics.MetricMapping) {
+	if mapping.TotalQueuedRequests == nil {
+		setupLog.Info("Not scraping metric: TotalQueuedRequests")
 	}
-	setupLog.Info("ExtProc server runner added to manager.")
-	return nil
+	if mapping.KVCacheUtilization == nil {
+		setupLog.Info("Not scraping metric: KVCacheUtilization")
+	}
+	if mapping.LoraRequestInfo == nil {
+		setupLog.Info("Not scraping metric: LoraRequestInfo")
+	}
+	if mapping.CacheConfigInfo == nil {
+		setupLog.Info("Not scraping metric: CacheConfigInfo")
+	}
 }
 
-// registerHealthServer adds the Health gRPC server as a Runnable to the given manager.
-func registerHealthServer(mgr manager.Manager, logger logr.Logger, ds datastore.Datastore, port int, isLeader *atomic.Bool, leaderElectionEnabled bool) error {
-	srv := grpc.NewServer()
-	healthPb.RegisterHealthServer(srv, &healthServer{
-		logger:                logger,
-		datastore:             ds,
-		isLeader:              isLeader,
-		leaderElectionEnabled: leaderElectionEnabled,
-	})
-	if err := mgr.Add(
-		runnable.NoLeaderElection(runnable.GRPCServer("health", srv, port))); err != nil {
-		setupLog.Error(err, "Failed to register health server")
-		return err
+// setupPprofHandlers only implements the pre-defined profiles:
+// https://cs.opensource.google/go/go/+/refs/tags/go1.24.4:src/runtime/pprof/pprof.go;l=108
+func setupPprofHandlers(mgr ctrl.Manager) error {
+	setupLog.Info("Enabling pprof handlers")
+	var err error
+	profiles := []string{
+		"heap",
+		"goroutine",
+		"allocs",
+		"threadcreate",
+		"block",
+		"mutex",
 	}
+	for _, p := range profiles {
+		err = mgr.AddMetricsServerExtraHandler("/debug/pprof/"+p, pprof.Handler(p))
+		if err != nil {
+			return err
+		}
+	}
+
+	runtime.SetMutexProfileFraction(1)
+	runtime.SetBlockProfileRate(1)
+
 	return nil
 }
 
