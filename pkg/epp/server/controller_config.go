@@ -36,6 +36,11 @@ func NewControllerConfig(startCrdReconcilers bool) ControllerConfig {
 	}
 }
 
+// NewTestControllerConfig is used in tests in other package
+func NewTestControllerConfig() ControllerConfig {
+	return ControllerConfig{true, true, true}
+}
+
 func (cc *ControllerConfig) PopulateControllerConfig(cfg *rest.Config) error {
 	if !cc.startCrdReconcilers {
 		return nil
