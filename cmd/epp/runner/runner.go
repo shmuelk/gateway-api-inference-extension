@@ -102,10 +102,18 @@ var (
 	setupLog = ctrl.Log.WithName("setup")
 )
 
+type RunnerHelper interface {
+	CreateAndRegisterServer(ds datastore.Datastore, opts *runserver.Options,
+		gknn common.GKNN, director *requestcontrol.Director, saturationDetector *utilizationdetector.Detector,
+		useExperimentalDatalayerV2 bool, mgr ctrl.Manager, logger logr.Logger) error
+	RegisterHealthServer(mgr manager.Manager, logger logr.Logger, ds datastore.Datastore, port int, isLeader *atomic.Bool, leaderElectionEnabled bool) error
+}
+
 // NewRunner initializes a new EPP Runner and returns its pointer.
-func NewRunner() *Runner {
+func NewRunner(helper RunnerHelper) *Runner {
 	return &Runner{
 		eppExecutableName:    "GIE",
+		helper:               helper,
 		requestControlConfig: requestcontrol.NewConfig(), // default requestcontrol config has empty plugin list
 		customCollectors:     []prometheus.Collector{},
 	}
