@@ -122,6 +122,7 @@ func NewRunner(helper RunnerHelper) *Runner {
 // Runner is used to run epp with its plugins
 type Runner struct {
 	eppExecutableName    string // the EPP executable name
+	helper               RunnerHelper
 	featureGates         map[string]bool
 	requestControlConfig *requestcontrol.Config
 	schedulerConfig      *scheduling.SchedulerConfig
