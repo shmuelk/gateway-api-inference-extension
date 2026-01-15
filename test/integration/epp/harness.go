@@ -178,7 +178,8 @@ func NewTestHarness(t *testing.T, ctx context.Context) *TestHarness {
 		requestcontrol.NewConfig(),
 	)
 
-	require.NoError(t, runner.SetupWithManager(mgr), "failed to setup server runner")
+	err = server.SetupWithManager(server.NewTestControllerConfig(), runner.Datastore, runner.GKNN, mgr)
+	require.NoError(t, err, "failed to setup server runner")
 
 	// 6. Start Background Processes
 	mgrCtx, mgrCancel := context.WithCancel(ctx)
