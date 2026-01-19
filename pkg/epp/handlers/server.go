@@ -95,7 +95,7 @@ type RequestContext struct {
 	SchedulingRequest *schedulingtypes.LLMRequest
 
 	RequestState         StreamRequestState
-	modelServerStreaming bool
+	ModelServerStreaming bool
 
 	Response *Response
 
@@ -271,7 +271,7 @@ func (s *StreamingServer) Process(srv extProcPb.ExternalProcessor_ProcessServer)
 				if header.Key == "status" && value != "200" {
 					reqCtx.ResponseStatusCode = errutil.ModelServerError
 				} else if header.Key == "content-type" && strings.Contains(value, "text/event-stream") {
-					reqCtx.modelServerStreaming = true
+					reqCtx.ModelServerStreaming = true
 					loggerTrace.Info("model server is streaming response")
 				}
 			}
@@ -289,7 +289,7 @@ func (s *StreamingServer) Process(srv extProcPb.ExternalProcessor_ProcessServer)
 			reqCtx.respHeaderResp = s.generateResponseHeaderResponse(reqCtx)
 
 		case *extProcPb.ProcessingRequest_ResponseBody:
-			if reqCtx.modelServerStreaming {
+			if reqCtx.ModelServerStreaming {
 				// Currently we punt on response parsing if the modelServer is streaming, and we just passthrough.
 
 				responseText := string(v.ResponseBody.Body)
