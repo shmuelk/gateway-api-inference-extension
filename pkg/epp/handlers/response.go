@@ -35,7 +35,7 @@ import (
 
 const (
 	streamingRespPrefix = "data: "
-	streamingEndMsg     = "data: [DONE]"
+	StreamingEndMsg     = "data: [DONE]"
 
 	// OpenAI API object types
 	objectTypeResponse            = "response"
@@ -138,7 +138,7 @@ func (s *StreamingServer) HandleResponseBodyModelStreaming(ctx context.Context, 
 		reqCtx.Usage = resp.Usage
 	}
 
-	if strings.Contains(responseText, streamingEndMsg) {
+	if strings.Contains(responseText, StreamingEndMsg) {
 		reqCtx.ResponseComplete = true
 		metrics.RecordInputTokens(reqCtx.IncomingModelName, reqCtx.TargetModelName, reqCtx.Usage.PromptTokens)
 		metrics.RecordOutputTokens(reqCtx.IncomingModelName, reqCtx.TargetModelName, reqCtx.Usage.CompletionTokens)
