@@ -134,7 +134,7 @@ func (s *StreamingServer) HandleResponseBodyModelStreaming(ctx context.Context, 
 	}
 
 	// Parse usage on EVERY chunk to catch split streams (where usage and [DONE] are in different chunks).
-	if resp := parseRespForUsage(ctx, responseText); resp.Usage.TotalTokens > 0 {
+	if resp := ParseRespForUsage(ctx, responseText); resp.Usage.TotalTokens > 0 {
 		reqCtx.Usage = resp.Usage
 	}
 
@@ -228,7 +228,7 @@ func (s *StreamingServer) generateResponseHeaders(reqCtx *RequestContext) []*con
 //
 // If include_usage is not included in the request, `data: [DONE]` is returned separately, which
 // indicates end of streaming.
-func parseRespForUsage(ctx context.Context, responseText string) ResponseBody {
+func ParseRespForUsage(ctx context.Context, responseText string) ResponseBody {
 	response := ResponseBody{}
 	logger := log.FromContext(ctx)
 
