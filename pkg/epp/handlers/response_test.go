@@ -187,7 +187,7 @@ func TestHandleStreamedResponseBody(t *testing.T) {
 			name: "streaming request without usage",
 			body: streamingBodyWithoutUsage,
 			reqCtx: &RequestContext{
-				modelServerStreaming: true,
+				ModelServerStreaming: true,
 			},
 			wantErr: false,
 			// In the middle of streaming response, so request context response is not set yet.
@@ -196,7 +196,7 @@ func TestHandleStreamedResponseBody(t *testing.T) {
 			name: "streaming request with usage",
 			body: streamingBodyWithUsage,
 			reqCtx: &RequestContext{
-				modelServerStreaming: true,
+				ModelServerStreaming: true,
 			},
 			wantErr: false,
 			want: fwkrq.Usage{
@@ -209,7 +209,7 @@ func TestHandleStreamedResponseBody(t *testing.T) {
 			name: "streaming request with usage and cached tokens",
 			body: streamingBodyWithUsageAndCachedTokens,
 			reqCtx: &RequestContext{
-				modelServerStreaming: true,
+				ModelServerStreaming: true,
 			},
 			wantErr: false,
 			want: fwkrq.Usage{
