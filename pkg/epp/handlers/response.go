@@ -35,7 +35,7 @@ import (
 
 const (
 	streamingRespPrefix = "data: "
-	streamingEndMsg     = "data: [DONE]"
+	StreamingEndMsg     = "data: [DONE]"
 )
 
 // HandleResponseBody always returns the requestContext even in the error case, as the request context is used in error handling.
@@ -89,7 +89,7 @@ func (s *StreamingServer) HandleResponseBodyModelStreaming(ctx context.Context, 
 		reqCtx.Usage = resp.Usage
 	}
 
-	if strings.Contains(responseText, streamingEndMsg) {
+	if strings.Contains(responseText, StreamingEndMsg) {
 		reqCtx.ResponseComplete = true
 		metrics.RecordInputTokens(reqCtx.IncomingModelName, reqCtx.TargetModelName, reqCtx.Usage.PromptTokens)
 		metrics.RecordOutputTokens(reqCtx.IncomingModelName, reqCtx.TargetModelName, reqCtx.Usage.CompletionTokens)
