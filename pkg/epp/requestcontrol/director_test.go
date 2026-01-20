@@ -73,7 +73,7 @@ type mockScheduler struct {
 	dataProduced    bool // denotes whether data production is expected.
 }
 
-func (m *mockScheduler) Schedule(_ context.Context, _ *fwksched.LLMRequest, endpoints []fwksched.Endpoint) (*fwksched.SchedulingResult, error) {
+func (m *mockScheduler) Schedule(_ context.Context, _ *fwksched.LLMRequest, endpoints []fwksched.Endpoint, profilesToUse []string) (*fwksched.SchedulingResult, error) {
 	if endpoints != nil && m.dataProduced {
 		data, ok := endpoints[0].Get(mockProducedDataKey)
 		if !ok || data.(mockProducedDataType).value != 42 {
