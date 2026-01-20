@@ -27,6 +27,7 @@ import (
 	"sigs.k8s.io/gateway-api-inference-extension/internal/runnable"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/common"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/datastore"
+	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/plugins"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/requestcontrol"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/saturationdetector/framework/plugins/utilizationdetector"
 	runserver "sigs.k8s.io/gateway-api-inference-extension/pkg/epp/server"
@@ -89,3 +90,6 @@ func (h *EppRunnerHelper) RegisterHealthServer(mgr manager.Manager, logger logr.
 	}
 	return nil
 }
+
+// AddPlugins enables the helper access to plugins if needed
+func (h *EppRunnerHelper) AddPlugins(plugins ...plugins.Plugin) {}
