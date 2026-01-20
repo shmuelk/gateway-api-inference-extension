@@ -100,6 +100,7 @@ type RunnerHelper interface {
 		gknn common.GKNN, director *requestcontrol.Director, saturationDetector *utilizationdetector.Detector,
 		useExperimentalDatalayerV2 bool, mgr ctrl.Manager, logger logr.Logger) error
 	RegisterHealthServer(mgr manager.Manager, logger logr.Logger, ds datastore.Datastore, port int, isLeader *atomic.Bool, leaderElectionEnabled bool) error
+	AddPlugins(plugins ...plugins.Plugin)
 }
 
 // NewRunner initializes a new EPP Runner and returns its pointer.
@@ -452,6 +453,8 @@ func (r *Runner) parseConfigurationPhaseTwo(ctx context.Context, rawConfig *conf
 
 	// Handler deprecated configuration options
 	r.deprecatedConfigurationHelper(cfg)
+
+	r.helper.AddPlugins(handle.GetAllPlugins()...)
 
 	logger.Info("loaded configuration from file/text successfully")
 	return cfg, nil
