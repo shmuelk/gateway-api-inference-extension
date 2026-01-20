@@ -51,7 +51,7 @@ type Scheduler struct {
 }
 
 // Schedule finds the target pod based on metrics and the requested lora adapter.
-func (s *Scheduler) Schedule(ctx context.Context, request *framework.LLMRequest, candidateEndpoints []framework.Endpoint) (result *framework.SchedulingResult, err error) {
+func (s *Scheduler) Schedule(ctx context.Context, request *framework.LLMRequest, candidateEndpoints []framework.Endpoint, profilesToUse []string) (result *framework.SchedulingResult, err error) {
 	loggerVerbose := log.FromContext(ctx).V(logutil.VERBOSE)
 
 	scheduleStart := time.Now()
@@ -64,13 +64,21 @@ func (s *Scheduler) Schedule(ctx context.Context, request *framework.LLMRequest,
 	cycleState := framework.NewCycleState()
 
 	for { // get the next set of profiles to run iteratively based on the request and the previous execution results
-		loggerVerbose.Info("Running profile handler, Pick profiles", "plugin", s.profileHandler.TypedName())
-		before := time.Now()
-		profiles := s.profileHandler.Pick(ctx, cycleState, request, s.profiles, profileRunResults)
-		metrics.RecordPluginProcessingLatency(profilePickerExtensionPoint, s.profileHandler.TypedName().Type, s.profileHandler.TypedName().Name, time.Since(before))
-		loggerVerbose.Info("Completed running profile handler Pick profiles successfully", "plugin", s.profileHandler.TypedName(), "result", profiles)
-		if len(profiles) == 0 { // profile picker didn't pick any profile to run
-			break
+		var profiles map[string]framework.SchedulerProfile
+		if profilesToUse != nil {
+			profiles = map[string]framework.SchedulerProfile{}
+			for _, profileName := range profilesToUse {
+				profiles[profileName] = s.profiles[profileName]
+			}
+		} else {
+			loggerVerbose.Info("Running profile handler, Pick profiles", "plugin", s.profileHandler.TypedName())
+			before := time.Now()
+			profiles = s.profileHandler.Pick(ctx, cycleState, request, s.profiles, profileRunResults)
+			metrics.RecordPluginProcessingLatency(profilePickerExtensionPoint, s.profileHandler.TypedName().Type, s.profileHandler.TypedName().Name, time.Since(before))
+			loggerVerbose.Info("Completed running profile handler Pick profiles successfully", "plugin", s.profileHandler.TypedName(), "result", profiles)
+			if len(profiles) == 0 { // profile picker didn't pick any profile to run
+				break
+			}
 		}
 
 		for name, profile := range profiles {
@@ -84,6 +92,9 @@ func (s *Scheduler) Schedule(ctx context.Context, request *framework.LLMRequest,
 			}
 
 			profileRunResults[name] = profileRunResult // if profile failed to run, the run result is nil
+		}
+		if profilesToUse != nil {
+			break
 		}
 	}
 

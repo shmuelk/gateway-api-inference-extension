@@ -61,7 +61,7 @@ type Datastore interface {
 
 // Scheduler defines the interface required by the Director for scheduling.
 type Scheduler interface {
-	Schedule(ctx context.Context, request *fwksched.LLMRequest, candidatePods []fwksched.Endpoint) (result *fwksched.SchedulingResult, err error)
+	Schedule(ctx context.Context, request *fwksched.LLMRequest, candidatePods []fwksched.Endpoint, profilesToUse []string) (result *fwksched.SchedulingResult, err error)
 }
 
 // NewDirectorWithConfig creates a new Director instance with all dependencies.
@@ -123,6 +123,23 @@ func (d *Director) getInferenceObjective(ctx context.Context, reqCtx *handlers.R
 // HandleRequest orchestrates the request lifecycle.
 // It always returns the requestContext even in the error case, as the request context is used in error handling.
 func (d *Director) HandleRequest(ctx context.Context, reqCtx *handlers.RequestContext) (*handlers.RequestContext, error) {
+	result, err := d.HandleRequestHelper(ctx, reqCtx, nil)
+	if err != nil {
+		return reqCtx, err
+	}
+
+	// Prepare Request (Populates RequestContext and call PreRequest plugins)
+	// Insert target endpoint to instruct Envoy to route requests to the specified target pod and attach the port number.
+	// Invoke PreRequest registered plugins.
+	reqCtx, err = d.prepareRequest(ctx, reqCtx, result)
+	if err != nil {
+		return reqCtx, err
+	}
+
+	return reqCtx, nil
+}
+
+func (d *Director) HandleRequestHelper(ctx context.Context, reqCtx *handlers.RequestContext, profilesToUse []string) (*fwksched.SchedulingResult, error) {
 	logger := log.FromContext(ctx)
 
 	// Parse Request, Resolve Target Models, and Determine Parameters
@@ -131,7 +148,7 @@ func (d *Director) HandleRequest(ctx context.Context, reqCtx *handlers.RequestCo
 	reqCtx.IncomingModelName, ok = requestBodyMap["model"].(string)
 
 	if !ok {
-		return reqCtx, errutil.Error{Code: errutil.BadRequest, Msg: "model not found in request body"}
+		return nil, errutil.Error{Code: errutil.BadRequest, Msg: "model not found in request body"}
 	}
 	if reqCtx.TargetModelName == "" {
 		// Default to incoming model name
@@ -144,7 +161,7 @@ func (d *Director) HandleRequest(ctx context.Context, reqCtx *handlers.RequestCo
 
 	requestBody, err := requtil.ExtractRequestBody(reqCtx.Request.Body, reqCtx.Request.Headers)
 	if err != nil {
-		return reqCtx, errutil.Error{Code: errutil.BadRequest, Msg: fmt.Errorf("failed to extract request data: %w", err).Error()}
+		return nil, errutil.Error{Code: errutil.BadRequest, Msg: fmt.Errorf("failed to extract request data: %w", err).Error()}
 	}
 
 	// Parse inference objective.
@@ -167,11 +184,11 @@ func (d *Director) HandleRequest(ctx context.Context, reqCtx *handlers.RequestCo
 
 	if err := d.admissionController.Admit(ctx, reqCtx, *infObjective.Spec.Priority); err != nil {
 		logger.V(logutil.DEFAULT).Info("Request rejected by admission control", "error", err)
-		return reqCtx, err
+		return nil, err
 	}
 	candidatePods := d.podLocator.Locate(ctx, reqCtx.Request.Metadata)
 	if len(candidatePods) == 0 {
-		return reqCtx, errutil.Error{
+		return nil, errutil.Error{
 			Code: errutil.ServiceUnavailable,
 			Msg:  "failed to find candidate pods for serving the request",
 		}
@@ -187,23 +204,14 @@ func (d *Director) HandleRequest(ctx context.Context, reqCtx *handlers.RequestCo
 	// Run admit request plugins
 	if !d.runAdmissionPlugins(ctx, reqCtx.SchedulingRequest, snapshotOfCandidatePods) {
 		logger.V(logutil.DEFAULT).Info("Request cannot be admitted")
-		return reqCtx, errutil.Error{Code: errutil.Internal, Msg: "request cannot be admitted"}
+		return nil, errutil.Error{Code: errutil.Internal, Msg: "request cannot be admitted"}
 	}
 
-	result, err := d.scheduler.Schedule(ctx, reqCtx.SchedulingRequest, snapshotOfCandidatePods)
+	result, err := d.scheduler.Schedule(ctx, reqCtx.SchedulingRequest, snapshotOfCandidatePods, nil)
 	if err != nil {
-		return reqCtx, errutil.Error{Code: errutil.InferencePoolResourceExhausted, Msg: fmt.Errorf("failed to find target pod: %w", err).Error()}
+		return nil, errutil.Error{Code: errutil.InferencePoolResourceExhausted, Msg: fmt.Errorf("failed to find target pod: %w", err).Error()}
 	}
-
-	// Prepare Request (Populates RequestContext and call PreRequest plugins)
-	// Insert target endpoint to instruct Envoy to route requests to the specified target pod and attach the port number.
-	// Invoke PreRequest registered plugins.
-	reqCtx, err = d.prepareRequest(ctx, reqCtx, result)
-	if err != nil {
-		return reqCtx, err
-	}
-
-	return reqCtx, nil
+	return result, nil
 }
 
 func (d *Director) applyWeightedModelRewrite(reqCtx *handlers.RequestContext) {
