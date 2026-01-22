@@ -21,6 +21,9 @@ import (
 	"errors"
 	"time"
 
+	"sigs.k8s.io/controller-runtime/pkg/log"
+
+	logutil "sigs.k8s.io/gateway-api-inference-extension/pkg/common/util/logging"
 	fwk "sigs.k8s.io/gateway-api-inference-extension/pkg/epp/framework/interface/requestcontrol"
 	schedulingtypes "sigs.k8s.io/gateway-api-inference-extension/pkg/epp/framework/interface/scheduling"
 )
@@ -29,10 +32,13 @@ import (
 // So, a plugin is executed only after all its dependencies have been executed.
 // If there is a cycle or any plugin fails with error, it returns an error.
 func executePluginsAsDAG(plugins []fwk.PrepareDataPlugin, ctx context.Context, request *schedulingtypes.LLMRequest, endpoints []schedulingtypes.Endpoint) error {
+	loggerDebug := log.FromContext(ctx).V(logutil.DEBUG)
 	for _, plugin := range plugins {
+		loggerDebug.Info("Running PrepareRequestData plugin", "plugin", plugin.TypedName())
 		if err := plugin.PrepareRequestData(ctx, request, endpoints); err != nil {
 			return errors.New("prepare data plugin " + plugin.TypedName().String() + " failed: " + err.Error())
 		}
+		loggerDebug.Info("Completed running PrepareRequestData plugin successfully", "plugin", plugin.TypedName())
 	}
 	return nil
 }
