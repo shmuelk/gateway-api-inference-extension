@@ -275,7 +275,7 @@ func (d *Director) prepareRequest(ctx context.Context, reqCtx *handlers.RequestC
 	reqCtx.TargetPod = targetMetadatas[0]
 	reqCtx.TargetEndpoint = multiEndpointString
 
-	d.runPreRequestPlugins(ctx, reqCtx.SchedulingRequest, result)
+	d.RunPreRequestPlugins(ctx, reqCtx.SchedulingRequest, result)
 
 	return reqCtx, nil
 }
@@ -345,7 +345,7 @@ func (d *Director) GetRandomEndpoint() *fwkdl.EndpointMetadata {
 	return pod.GetMetadata()
 }
 
-func (d *Director) runPreRequestPlugins(ctx context.Context, request *fwksched.LLMRequest,
+func (d *Director) RunPreRequestPlugins(ctx context.Context, request *fwksched.LLMRequest,
 	schedulingResult *fwksched.SchedulingResult) {
 	loggerDebug := log.FromContext(ctx).V(logutil.DEBUG)
 	for _, plugin := range d.requestControlPlugins.preRequestPlugins {
