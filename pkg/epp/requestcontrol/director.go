@@ -207,7 +207,7 @@ func (d *Director) HandleRequestHelper(ctx context.Context, reqCtx *handlers.Req
 		return nil, errutil.Error{Code: errutil.Internal, Msg: "request cannot be admitted"}
 	}
 
-	result, err := d.scheduler.Schedule(ctx, reqCtx.SchedulingRequest, snapshotOfCandidatePods, nil)
+	result, err := d.scheduler.Schedule(ctx, reqCtx.SchedulingRequest, snapshotOfCandidatePods, profilesToUse)
 	if err != nil {
 		return nil, errutil.Error{Code: errutil.InferencePoolResourceExhausted, Msg: fmt.Errorf("failed to find target pod: %w", err).Error()}
 	}
