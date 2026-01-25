@@ -57,6 +57,7 @@ import (
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/flowcontrol/contracts"
 	fccontroller "sigs.k8s.io/gateway-api-inference-extension/pkg/epp/flowcontrol/controller"
 	fcregistry "sigs.k8s.io/gateway-api-inference-extension/pkg/epp/flowcontrol/registry"
+	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/framework/interface/plugin"
 	fwkplugin "sigs.k8s.io/gateway-api-inference-extension/pkg/epp/framework/interface/plugin"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/framework/plugins/scheduling/picker"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/framework/plugins/scheduling/profile"
@@ -100,7 +101,7 @@ type RunnerHelper interface {
 		gknn common.GKNN, director *requestcontrol.Director, saturationDetector *utilizationdetector.Detector,
 		useExperimentalDatalayerV2 bool, mgr ctrl.Manager, logger logr.Logger) error
 	RegisterHealthServer(mgr manager.Manager, logger logr.Logger, ds datastore.Datastore, port int, isLeader *atomic.Bool, leaderElectionEnabled bool) error
-	AddPlugins(plugins ...plugins.Plugin)
+	AddPlugins(plugins ...plugin.Plugin)
 }
 
 // NewRunner initializes a new EPP Runner and returns its pointer.
