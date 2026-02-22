@@ -28,7 +28,7 @@ import (
 
 // NewTestRunnerSetup creates a setup runner dedicated for integration test and its corresponding dataStore.
 func NewTestRunnerSetup(ctx context.Context, cfg *rest.Config, opts *runserver.Options, pmc backendmetrics.PodMetricsClient) (ctrl.Manager, datastore.Datastore, error) {
-	runner := NewRunner()
+	runner := NewRunner(&EppRunnerHelper{})
 	runner.testOverrideSkipNameValidation = true
 	return runner.setup(ctx, cfg, opts, pmc)
 }
