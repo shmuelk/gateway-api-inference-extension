@@ -34,13 +34,6 @@ import (
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/util/request"
 )
 
-const (
-	// defaultFairnessID is the default fairness ID used when no ID is provided in the request.
-	// This ensures that requests without explicit fairness identifiers are still grouped and managed by the Flow Control
-	// system.
-	defaultFairnessID = "default-flow"
-)
-
 func (s *StreamingServer) HandleRequestHeaders(ctx context.Context, reqCtx *RequestContext, req *extProcPb.ProcessingRequest_RequestHeaders) error {
 	reqCtx.RequestReceivedTimestamp = time.Now()
 
@@ -73,7 +66,7 @@ func (s *StreamingServer) HandleRequestHeaders(ctx context.Context, reqCtx *Requ
 	}
 
 	if reqCtx.FairnessID == "" {
-		reqCtx.FairnessID = defaultFairnessID
+		reqCtx.FairnessID = metadata.DefaultFairnessID
 	}
 
 	return nil
