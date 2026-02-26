@@ -30,7 +30,7 @@ import (
 
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/bbr/framework"
 	logutil "sigs.k8s.io/gateway-api-inference-extension/pkg/common/observability/logging"
-	requtil "sigs.k8s.io/gateway-api-inference-extension/pkg/epp/util/request"
+	reqcommon "sigs.k8s.io/gateway-api-inference-extension/pkg/common/request"
 )
 
 type Datastore interface {
@@ -108,8 +108,8 @@ func (s *Server) Process(srv extProcPb.ExternalProcessor_ProcessServer) error {
 				// If streaming and the body is not empty, then headers are handled when processing request body.
 				loggerVerbose.Info("Received headers, passing off header processing until body arrives...")
 			} else {
-				if requestId := requtil.ExtractHeaderValue(v, requtil.RequestIdHeaderKey); len(requestId) > 0 {
-					logger = logger.WithValues(requtil.RequestIdHeaderKey, requestId)
+				if requestId := reqcommon.ExtractHeaderValue(v, reqcommon.RequestIdHeaderKey); len(requestId) > 0 {
+					logger = logger.WithValues(reqcommon.RequestIdHeaderKey, requestId)
 					loggerVerbose = logger.V(logutil.VERBOSE)
 					ctx = log.IntoContext(ctx, logger)
 				}
