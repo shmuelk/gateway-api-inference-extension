@@ -53,7 +53,7 @@ const (
 	// defaultExistsTimeout is the default timeout for a resource to exist in the api server.
 	defaultExistsTimeout = 30 * time.Second
 	// defaultReadyTimeout is the default timeout for a resource to report a ready state.
-	defaultReadyTimeout = 4 * time.Minute
+	defaultReadyTimeout = 3 * time.Minute
 	// defaultModelReadyTimeout is the default timeout for the model server deployment to report a ready state.
 	defaultModelReadyTimeout = 10 * time.Minute
 	// defaultInterval is the default interval to check if a resource exists or ready conditions.
