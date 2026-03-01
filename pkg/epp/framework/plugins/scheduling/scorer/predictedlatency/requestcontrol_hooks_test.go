@@ -87,7 +87,7 @@ func TestNewPredictedLatencyContext(t *testing.T) {
 
 func TestNewPredictedLatencyContext_NilBody(t *testing.T) {
 	request := &schedulingtypes.LLMRequest{
-		Headers: map[string]string{requtil.RequestIdHeaderKey: "test-nil-body"},
+		Headers: map[string]string{reqcommon.RequestIdHeaderKey: "test-nil-body"},
 		Body:    nil,
 	}
 	ctx := newPredictedLatencyContext(request)
