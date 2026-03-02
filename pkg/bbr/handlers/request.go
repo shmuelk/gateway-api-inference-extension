@@ -30,8 +30,8 @@ import (
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/bbr/framework"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/bbr/metrics"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/common"
+	reqenvoy "sigs.k8s.io/gateway-api-inference-extension/pkg/common/envoy/request"
 	logutil "sigs.k8s.io/gateway-api-inference-extension/pkg/common/observability/logging"
-	requtil "sigs.k8s.io/gateway-api-inference-extension/pkg/epp/util/request"
 )
 
 const (
@@ -197,7 +197,7 @@ func (s *Server) HandleRequestHeaders(reqCtx *RequestContext, headers *eppb.Http
 
 	if headers != nil && headers.Headers != nil {
 		for _, header := range headers.Headers.Headers {
-			reqCtx.Request.Headers[header.Key] = requtil.GetHeaderValue(header)
+			reqCtx.Request.Headers[header.Key] = reqenvoy.GetHeaderValue(header)
 		}
 	}
 
