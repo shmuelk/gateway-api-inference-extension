@@ -33,6 +33,7 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
+	reqenvoy "sigs.k8s.io/gateway-api-inference-extension/pkg/common/envoy/request"
 	logutil "sigs.k8s.io/gateway-api-inference-extension/pkg/common/observability/logging"
 	reqcommon "sigs.k8s.io/gateway-api-inference-extension/pkg/common/request"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/datalayer"
@@ -197,11 +198,11 @@ func (s *StreamingServer) Process(srv extProcPb.ExternalProcessor_ProcessServer)
 			return status.Errorf(codes.Unknown, "cannot receive stream request: %v", err)
 		}
 
-		reqCtx.Request.Metadata = reqcommon.ExtractMetadataValues(req)
+		reqCtx.Request.Metadata = reqenvoy.ExtractMetadataValues(req)
 
 		switch v := req.Request.(type) {
 		case *extProcPb.ProcessingRequest_RequestHeaders:
-			requestID := reqcommon.ExtractHeaderValue(v, reqcommon.RequestIdHeaderKey)
+			requestID := reqenvoy.ExtractHeaderValue(v, reqcommon.RequestIdHeaderKey)
 			// request ID is a must for maintaining a state per request in plugins that hold internal state and use PluginState.
 			// if request id was not supplied as a header, we generate it ourselves.
 			if len(requestID) == 0 {

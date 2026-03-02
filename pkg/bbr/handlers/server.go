@@ -29,6 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/bbr/framework"
+	reqenvoy "sigs.k8s.io/gateway-api-inference-extension/pkg/common/envoy/request"
 	logutil "sigs.k8s.io/gateway-api-inference-extension/pkg/common/observability/logging"
 	reqcommon "sigs.k8s.io/gateway-api-inference-extension/pkg/common/request"
 )
@@ -108,7 +109,7 @@ func (s *Server) Process(srv extProcPb.ExternalProcessor_ProcessServer) error {
 				// If streaming and the body is not empty, then headers are handled when processing request body.
 				loggerVerbose.Info("Received headers, passing off header processing until body arrives...")
 			} else {
-				if requestId := reqcommon.ExtractHeaderValue(v, reqcommon.RequestIdHeaderKey); len(requestId) > 0 {
+				if requestId := reqenvoy.ExtractHeaderValue(v, reqcommon.RequestIdHeaderKey); len(requestId) > 0 {
 					logger = logger.WithValues(reqcommon.RequestIdHeaderKey, requestId)
 					loggerVerbose = logger.V(logutil.VERBOSE)
 					ctx = log.IntoContext(ctx, logger)

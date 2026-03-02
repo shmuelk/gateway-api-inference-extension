@@ -29,7 +29,7 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/common"
-	reqcommon "sigs.k8s.io/gateway-api-inference-extension/pkg/common/request"
+	reqenvoy "sigs.k8s.io/gateway-api-inference-extension/pkg/common/envoy/request"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/metadata"
 	errutil "sigs.k8s.io/gateway-api-inference-extension/pkg/epp/util/error"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/util/request"
@@ -55,7 +55,7 @@ func (s *StreamingServer) HandleRequestHeaders(ctx context.Context, reqCtx *Requ
 	}
 
 	for _, header := range req.RequestHeaders.Headers.Headers {
-		reqCtx.Request.Headers[header.Key] = reqcommon.GetHeaderValue(header)
+		reqCtx.Request.Headers[header.Key] = reqenvoy.GetHeaderValue(header)
 		switch header.Key {
 		case metadata.FlowFairnessIDKey:
 			reqCtx.FairnessID = reqCtx.Request.Headers[header.Key]
