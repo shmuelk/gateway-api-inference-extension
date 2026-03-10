@@ -33,8 +33,8 @@ import (
 
 func (s *Server) generateRequestBodyResponses(requestBodyBytes []byte) []*extProcPb.ProcessingResponse {
 	commonResponses := common.BuildChunkedBodyResponses(requestBodyBytes, true)
-	responses := []*extProcPb.ProcessingResponse{}
-	for _, commonResp := range commonResponses {
+	responses := make([]*extProcPb.ProcessingResponse, len(commonResponses))
+	for index, commonResp := range commonResponses {
 		resp := &extProcPb.ProcessingResponse{
 			Response: &extProcPb.ProcessingResponse_RequestBody{
 				RequestBody: &extProcPb.BodyResponse{
@@ -42,7 +42,7 @@ func (s *Server) generateRequestBodyResponses(requestBodyBytes []byte) []*extPro
 				},
 			},
 		}
-		responses = append(responses, resp)
+		responses[index] = resp
 	}
 	return responses
 }
