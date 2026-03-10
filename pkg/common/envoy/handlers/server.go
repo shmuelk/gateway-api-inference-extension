@@ -45,6 +45,7 @@ type Handler interface {
 	HandleResponseReceived(ctx context.Context, reqCtx *ExtProcRequestContext) error
 	HandleResponseBody(ctx context.Context, reqCtx *ExtProcRequestContext, responseBytes []byte) error
 	HandleResponseBodyModelStreaming(ctx context.Context, reqCtx *ExtProcRequestContext, responseBytes []byte, endOfStream bool)
+	HandleResponseBodyModelStreamingComplete(ctx context.Context, reqCtx *ExtProcRequestContext)
 	ResponseSent(reqCtx *ExtProcRequestContext)
 	RequestEnded(err error, reqCtx *ExtProcRequestContext)
 	SetLogger(logger logr.Logger)
@@ -243,15 +244,21 @@ func (s *Server) Process(srv extProcPb.ExternalProcessor_ProcessServer) error {
 			reqCtx.respHeaderResp = s.generateResponseHeaderResponse(reqCtx)
 
 		case *extProcPb.ProcessingRequest_ResponseBody:
-			reqCtx.ResponseComplete = v.ResponseBody.EndOfStream
-			if reqCtx.ResponseComplete {
-				loggerTrace.Info("stream completed")
-				reqCtx.ResponseCompleteTimestamp = time.Now()
-			}
+			endOfStream := v.ResponseBody.EndOfStream
+			chunk := v.ResponseBody.Body
+
 			if reqCtx.modelServerStreaming {
-				// Currently we punt on response parsing if the modelServer is streaming, and we just passthrough.
-				reqCtx.handler.HandleResponseBodyModelStreaming(ctx, reqCtx, v.ResponseBody.Body, v.ResponseBody.EndOfStream)
-				reqCtx.respBodyResp = generateResponseBodyResponses(v.ResponseBody.Body, v.ResponseBody.EndOfStream)
+				reqCtx.handler.HandleResponseBodyModelStreaming(ctx, reqCtx, chunk, endOfStream)
+				reqCtx.respBodyResp = generateResponseBodyResponses(chunk, endOfStream)
+			} else {
+				body = append(body, chunk...)
+			}
+
+			if endOfStream {
+				err = s.finishResponse(ctx, reqCtx, body)
+			}
+
+			if reqCtx.modelServerStreaming {
 			} else {
 				body = append(body, v.ResponseBody.Body...)
 
@@ -267,7 +274,17 @@ func (s *Server) Process(srv extProcPb.ExternalProcessor_ProcessServer) error {
 			}
 
 		case *extProcPb.ProcessingRequest_ResponseTrailers:
-			// This is currently unused.
+			// For HTTP, the response trailer is not sent. Thus, this case will not be triggered.
+			// For gRPC(over HTTP2), the protocol relies on responseTrialers to determine whether a response is complete.
+			// More info: https://chromium.googlesource.com/external/github.com/grpc/grpc/+/HEAD/doc/PROTOCOL-HTTP2.md#responses
+			err = s.finishResponse(ctx, reqCtx, body)
+			if err == nil {
+				reqCtx.respTrailerResp = &extProcPb.ProcessingResponse{
+					Response: &extProcPb.ProcessingResponse_ResponseTrailers{
+						ResponseTrailers: &extProcPb.TrailersResponse{},
+					},
+				}
+			}
 		}
 
 		// Handle the err and fire an immediate response.
@@ -292,6 +309,29 @@ func (s *Server) Process(srv extProcPb.ExternalProcessor_ProcessServer) error {
 			return err
 		}
 	}
+}
+
+// finishResponse ensures all post-response logic, such as metric recording
+// and state updates, is executed exactly once for the request lifecycle.
+func (s *Server) finishResponse(ctx context.Context, reqCtx *ExtProcRequestContext, body []byte) error {
+	// Return early if the response has already been finished to prevent
+	// duplicate execution of side effects and metrics.
+	if reqCtx.ResponseComplete {
+		return nil
+	}
+	reqCtx.ResponseComplete = true
+	reqCtx.ResponseCompleteTimestamp = time.Now()
+	reqCtx.ResponseSize = len(body)
+
+	if reqCtx.modelServerStreaming {
+		reqCtx.handler.HandleResponseBodyModelStreamingComplete(ctx, reqCtx)
+	} else {
+		reqCtx.respBodyResp = generateResponseBodyResponses(body, true)
+		if err := reqCtx.handler.HandleResponseBody(ctx, reqCtx, body); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Server) handleRequestHeaders(reqCtx *ExtProcRequestContext, req *extProcPb.ProcessingRequest_RequestHeaders) error {

@@ -19,114 +19,44 @@ package handlers
 import (
 	"context"
 
-	configPb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	extProcPb "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	envoy "sigs.k8s.io/gateway-api-inference-extension/pkg/common/envoy"
+	envoyhandlers "sigs.k8s.io/gateway-api-inference-extension/pkg/common/envoy/handlers"
 	logutil "sigs.k8s.io/gateway-api-inference-extension/pkg/common/observability/logging"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/metrics"
-	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/util/request"
 )
 
-// HandleResponseBody always returns the requestContext even in the error case, as the request context is used in error handling.
-func (s *StreamingServer) HandleResponseBody(ctx context.Context, reqCtx *RequestContext, responseBytes []byte) (*RequestContext, error) {
+func (sh *ServerHandler) handleResponseBodyHelper(ctx context.Context, reqCtx *envoyhandlers.ExtProcRequestContext, responseBytes []byte) error {
 	logger := log.FromContext(ctx)
 
-	parsedResponse, parseErr := s.parser.ParseResponse(ctx, responseBytes, reqCtx.Response.Headers, true)
+	parsedResponse, parseErr := sh.parser.ParseResponse(ctx, responseBytes, reqCtx.Response.Headers, true)
 	if parseErr != nil {
 		logger.Error(parseErr, "response parsing")
 	}
 	if parsedResponse != nil && parsedResponse.Usage != nil {
-		reqCtx.Usage = *parsedResponse.Usage
-		logger.V(logutil.VERBOSE).Info("Response generated", "usage", reqCtx.Usage)
+		sh.reqCtx.Usage = *parsedResponse.Usage
+		logger.V(logutil.VERBOSE).Info("Response generated", "usage", sh.reqCtx.Usage)
 	}
-	return s.director.HandleResponseBodyComplete(ctx, reqCtx)
+	_, err := sh.director.HandleResponseBodyComplete(ctx, reqCtx, sh.reqCtx)
+	return err
 }
 
 // The function is to handle streaming response if the modelServer is streaming.
-func (s *StreamingServer) HandleResponseBodyModelStreaming(ctx context.Context, reqCtx *RequestContext, responseBytes []byte, endOfStream bool) {
+func (sh *ServerHandler) HandleResponseBodyModelStreamingHelper(ctx context.Context, reqCtx *envoyhandlers.ExtProcRequestContext, responseBytes []byte, endOfStream bool) {
 	logger := log.FromContext(ctx)
-	_, err := s.director.HandleResponseBodyStreaming(ctx, reqCtx)
+	_, err := sh.director.HandleResponseBodyStreaming(ctx, reqCtx, sh.reqCtx)
 	if err != nil {
 		logger.Error(err, "error in HandleResponseBodyStreaming")
 	}
-	parsedResp, err := s.parser.ParseResponse(ctx, responseBytes, reqCtx.Response.Headers, endOfStream)
+	parsedResp, err := sh.parser.ParseResponse(ctx, responseBytes, reqCtx.Response.Headers, endOfStream)
 	if err != nil {
 		logger.Error(err, "streaming response parsing")
 	} else if parsedResp != nil && parsedResp.Usage != nil {
-		reqCtx.Usage = *parsedResp.Usage
-		metrics.RecordInputTokens(reqCtx.IncomingModelName, reqCtx.TargetModelName, reqCtx.Usage.PromptTokens)
-		metrics.RecordOutputTokens(reqCtx.IncomingModelName, reqCtx.TargetModelName, reqCtx.Usage.CompletionTokens)
-		if reqCtx.Usage.PromptTokenDetails != nil {
-			metrics.RecordPromptCachedTokens(reqCtx.IncomingModelName, reqCtx.TargetModelName, reqCtx.Usage.PromptTokenDetails.CachedTokens)
+		sh.reqCtx.Usage = *parsedResp.Usage
+		metrics.RecordInputTokens(sh.reqCtx.IncomingModelName, sh.reqCtx.TargetModelName, sh.reqCtx.Usage.PromptTokens)
+		metrics.RecordOutputTokens(sh.reqCtx.IncomingModelName, sh.reqCtx.TargetModelName, sh.reqCtx.Usage.CompletionTokens)
+		if sh.reqCtx.Usage.PromptTokenDetails != nil {
+			metrics.RecordPromptCachedTokens(sh.reqCtx.IncomingModelName, sh.reqCtx.TargetModelName, sh.reqCtx.Usage.PromptTokenDetails.CachedTokens)
 		}
 	}
-}
-
-func (s *StreamingServer) HandleResponseHeaders(ctx context.Context, reqCtx *RequestContext, resp *extProcPb.ProcessingRequest_ResponseHeaders) (*RequestContext, error) {
-	for _, header := range resp.ResponseHeaders.Headers.Headers {
-		reqCtx.Response.Headers[header.Key] = envoy.GetHeaderValue(header)
-	}
-
-	reqCtx, err := s.director.HandleResponseReceived(ctx, reqCtx)
-
-	return reqCtx, err
-}
-
-func (s *StreamingServer) generateResponseHeaderResponse(reqCtx *RequestContext) *extProcPb.ProcessingResponse {
-	return &extProcPb.ProcessingResponse{
-		Response: &extProcPb.ProcessingResponse_ResponseHeaders{
-			ResponseHeaders: &extProcPb.HeadersResponse{
-				Response: &extProcPb.CommonResponse{
-					HeaderMutation: &extProcPb.HeaderMutation{
-						SetHeaders: s.generateResponseHeaders(reqCtx),
-					},
-				},
-			},
-		},
-	}
-}
-
-func generateResponseBodyResponses(responseBodyBytes []byte, setEoS bool) []*extProcPb.ProcessingResponse {
-	commonResponses := envoy.BuildChunkedBodyResponses(responseBodyBytes, setEoS)
-	responses := make([]*extProcPb.ProcessingResponse, 0, len(commonResponses))
-	for _, commonResp := range commonResponses {
-		resp := &extProcPb.ProcessingResponse{
-			Response: &extProcPb.ProcessingResponse_ResponseBody{
-				ResponseBody: &extProcPb.BodyResponse{
-					Response: commonResp,
-				},
-			},
-		}
-		responses = append(responses, resp)
-	}
-	return responses
-}
-
-func (s *StreamingServer) generateResponseHeaders(reqCtx *RequestContext) []*configPb.HeaderValueOption {
-	// can likely refactor these two bespoke headers to be updated in PostDispatch, to centralize logic.
-	headers := []*configPb.HeaderValueOption{
-		{
-			Header: &configPb.HeaderValue{
-				// This is for debugging purpose only.
-				Key:      "x-went-into-resp-headers",
-				RawValue: []byte("true"),
-			},
-		},
-	}
-
-	// Include any non-system-owned headers.
-	for key, value := range reqCtx.Response.Headers {
-		if request.IsSystemOwnedHeader(key) {
-			continue
-		}
-		headers = append(headers, &configPb.HeaderValueOption{
-			Header: &configPb.HeaderValue{
-				Key:      key,
-				RawValue: []byte(value),
-			},
-		})
-	}
-	return headers
 }
