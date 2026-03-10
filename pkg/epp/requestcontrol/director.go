@@ -31,6 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"sigs.k8s.io/gateway-api-inference-extension/apix/v1alpha2"
+	envoyhandlers "sigs.k8s.io/gateway-api-inference-extension/pkg/common/envoy/handlers"
 	errcommon "sigs.k8s.io/gateway-api-inference-extension/pkg/common/error"
 	logutil "sigs.k8s.io/gateway-api-inference-extension/pkg/common/observability/logging"
 	reqcommon "sigs.k8s.io/gateway-api-inference-extension/pkg/common/request"
@@ -128,23 +129,23 @@ func (d *Director) getInferenceObjective(ctx context.Context, reqCtx *handlers.R
 
 // HandleRequest orchestrates the request lifecycle.
 // It always returns the requestContext even in the error case, as the request context is used in error handling.
-func (d *Director) HandleRequest(ctx context.Context, reqCtx *handlers.RequestContext) (*handlers.RequestContext, error) {
+func (d *Director) HandleRequest(ctx context.Context, extProcReqCtx *envoyhandlers.ExtProcRequestContext, reqCtx *handlers.RequestContext) error {
 	logger := log.FromContext(ctx)
 
 	// Parse, mutate, and extract the request body
-	llmRequestBody, err := d.processRequestBody(ctx, reqCtx, d.parser)
+	llmRequestBody, err := d.processRequestBody(ctx, extProcReqCtx, reqCtx, d.parser)
 	if err != nil {
-		return reqCtx, err
+		return err
 	}
 
 	infObjective := d.getInferenceObjective(ctx, reqCtx)
 	requestObjectives := fwksched.RequestObjectives{Priority: *infObjective.Spec.Priority}
 
 	reqCtx.SchedulingRequest = &fwksched.LLMRequest{
-		RequestId:   reqCtx.Request.Headers[reqcommon.RequestIdHeaderKey],
+		RequestId:   extProcReqCtx.Request.Headers[reqcommon.RequestIdHeaderKey],
 		TargetModel: reqCtx.TargetModelName,
 		Body:        llmRequestBody,
-		Headers:     reqCtx.Request.Headers,
+		Headers:     extProcReqCtx.Request.Headers,
 		Objectives:  requestObjectives,
 	}
 
@@ -152,13 +153,13 @@ func (d *Director) HandleRequest(ctx context.Context, reqCtx *handlers.RequestCo
 	ctx = log.IntoContext(ctx, logger)
 	logger.V(logutil.DEBUG).Info("LLM request assembled")
 
-	if err := d.admissionController.Admit(ctx, reqCtx, *infObjective.Spec.Priority); err != nil {
+	if err := d.admissionController.Admit(ctx, extProcReqCtx, reqCtx, *infObjective.Spec.Priority); err != nil {
 		logger.V(logutil.DEFAULT).Info("Request rejected by admission control", "error", err)
-		return reqCtx, err
+		return err
 	}
-	candidatePods := d.podLocator.Locate(ctx, reqCtx.Request.Metadata)
+	candidatePods := d.podLocator.Locate(ctx, extProcReqCtx.Request.Metadata)
 	if len(candidatePods) == 0 {
-		return reqCtx, errcommon.Error{
+		return errcommon.Error{
 			Code: errcommon.ServiceUnavailable,
 			Msg:  "failed to find candidate pods for serving the request",
 		}
@@ -175,27 +176,27 @@ func (d *Director) HandleRequest(ctx context.Context, reqCtx *handlers.RequestCo
 	// Run admit request plugins
 	if !d.runAdmissionPlugins(ctx, reqCtx.SchedulingRequest, snapshotOfCandidatePods) {
 		logger.V(logutil.DEFAULT).Info("Request cannot be admitted")
-		return reqCtx, errcommon.Error{Code: errcommon.Internal, Msg: "request cannot be admitted"}
+		return errcommon.Error{Code: errcommon.Internal, Msg: "request cannot be admitted"}
 	}
 
 	result, err := d.scheduler.Schedule(ctx, reqCtx.SchedulingRequest, snapshotOfCandidatePods)
 	if err != nil {
-		return reqCtx, errcommon.Error{Code: errcommon.ResourceExhausted, Msg: fmt.Errorf("failed to find target pod: %w", err).Error()}
+		return errcommon.Error{Code: errcommon.ResourceExhausted, Msg: fmt.Errorf("failed to find target pod: %w", err).Error()}
 	}
 
 	// Prepare Request (Populates RequestContext and call PreRequest plugins)
 	// Insert target endpoint to instruct Envoy to route requests to the specified target pod and attach the port number.
 	// Invoke PreRequest registered plugins.
-	reqCtx, err = d.prepareRequest(ctx, reqCtx, result)
+	err = d.prepareRequest(ctx, reqCtx, result)
 	if err != nil {
-		return reqCtx, err
+		return err
 	}
 
-	return reqCtx, nil
+	return nil
 }
 
-func (d *Director) processRequestBody(ctx context.Context, reqCtx *handlers.RequestContext, parser fwkrh.Parser) (*fwksched.LLMRequestBody, error) {
-	llmRequestBody, err := parser.ParseRequest(ctx, reqCtx.Request.RawBody, reqCtx.Request.Headers)
+func (d *Director) processRequestBody(ctx context.Context, extProcReqCtx *envoyhandlers.ExtProcRequestContext, reqCtx *handlers.RequestContext, parser fwkrh.Parser) (*fwksched.LLMRequestBody, error) {
+	llmRequestBody, err := parser.ParseRequest(ctx, extProcReqCtx.Request.RawBody, extProcReqCtx.Request.Headers)
 	if err != nil {
 		return nil, errcommon.Error{Code: errcommon.BadRequest, Msg: err.Error()}
 	}
@@ -203,9 +204,9 @@ func (d *Director) processRequestBody(ctx context.Context, reqCtx *handlers.Requ
 	switch v := llmRequestBody.ParsedBody.(type) {
 	case proto.Message:
 		// Protos are not currently mutated, return as-is.
-		reqCtx.RequestSize = len(reqCtx.Request.RawBody)
+		extProcReqCtx.RequestSize = len(extProcReqCtx.Request.RawBody)
 	case map[string]any:
-		if err := d.mutateAndRepackage(ctx, reqCtx, v); err != nil {
+		if err := d.mutateAndRepackage(ctx, extProcReqCtx, reqCtx, v); err != nil {
 			return nil, err
 		}
 	default:
@@ -214,7 +215,7 @@ func (d *Director) processRequestBody(ctx context.Context, reqCtx *handlers.Requ
 	return llmRequestBody, nil
 }
 
-func (d *Director) mutateAndRepackage(ctx context.Context, reqCtx *handlers.RequestContext, bodyMap map[string]any) error {
+func (d *Director) mutateAndRepackage(ctx context.Context, extProcReqCtx *envoyhandlers.ExtProcRequestContext, reqCtx *handlers.RequestContext, bodyMap map[string]any) error {
 	logger := log.FromContext(ctx)
 
 	// Mutate the model name inside the map
@@ -230,8 +231,8 @@ func (d *Director) mutateAndRepackage(ctx context.Context, reqCtx *handlers.Requ
 		return errcommon.Error{Code: errcommon.Internal, Msg: "Error marshalling request body"}
 	}
 
-	reqCtx.Request.RawBody = requestBodyBytes
-	reqCtx.RequestSize = len(requestBodyBytes)
+	extProcReqCtx.Request.RawBody = requestBodyBytes
+	extProcReqCtx.RequestSize = len(requestBodyBytes)
 
 	return nil
 }
@@ -290,10 +291,10 @@ func (d *Director) selectWeightedModel(models []v1alpha2.TargetModel) string {
 
 // prepareRequest populates the RequestContext and calls the registered PreRequest plugins
 // for allowing plugging customized logic based on the scheduling result.
-func (d *Director) prepareRequest(ctx context.Context, reqCtx *handlers.RequestContext, result *fwksched.SchedulingResult) (*handlers.RequestContext, error) {
+func (d *Director) prepareRequest(ctx context.Context, reqCtx *handlers.RequestContext, result *fwksched.SchedulingResult) error {
 	logger := log.FromContext(ctx)
 	if result == nil || len(result.ProfileResults) == 0 {
-		return reqCtx, errcommon.Error{Code: errcommon.Internal, Msg: "results must be greater than zero"}
+		return errcommon.Error{Code: errcommon.Internal, Msg: "results must be greater than zero"}
 	}
 	// primary profile is used to set destination
 	targetMetadatas := []*fwkdl.EndpointMetadata{}
@@ -314,7 +315,7 @@ func (d *Director) prepareRequest(ctx context.Context, reqCtx *handlers.RequestC
 
 	d.runPreRequestPlugins(ctx, reqCtx.SchedulingRequest, result)
 
-	return reqCtx, nil
+	return nil
 }
 
 func (d *Director) toSchedulerPodMetrics(pods []backendmetrics.PodMetrics) []fwksched.Endpoint {
@@ -327,11 +328,11 @@ func (d *Director) toSchedulerPodMetrics(pods []backendmetrics.PodMetrics) []fwk
 }
 
 // HandleResponseReceived is called when the response headers are received.
-func (d *Director) HandleResponseReceived(ctx context.Context, reqCtx *handlers.RequestContext) (*handlers.RequestContext, error) {
+func (d *Director) HandleResponseReceived(ctx context.Context, extProcReqCtx *envoyhandlers.ExtProcRequestContext, reqCtx *handlers.RequestContext) (*handlers.RequestContext, error) {
 	response := &fwk.Response{
-		RequestId:   reqCtx.Request.Headers[reqcommon.RequestIdHeaderKey],
-		Headers:     reqCtx.Response.Headers,
-		ReqMetadata: reqCtx.Request.Metadata,
+		RequestId:   extProcReqCtx.Request.Headers[reqcommon.RequestIdHeaderKey],
+		Headers:     extProcReqCtx.Response.Headers,
+		ReqMetadata: extProcReqCtx.Request.Metadata,
 	}
 	// TODO: to extend fallback functionality, handle cases where target pod is unavailable
 	// https://github.com/kubernetes-sigs/gateway-api-inference-extension/issues/1224
@@ -341,13 +342,13 @@ func (d *Director) HandleResponseReceived(ctx context.Context, reqCtx *handlers.
 }
 
 // HandleResponseBodyStreaming is called every time a chunk of the response body is received.
-func (d *Director) HandleResponseBodyStreaming(ctx context.Context, reqCtx *handlers.RequestContext) (*handlers.RequestContext, error) {
+func (d *Director) HandleResponseBodyStreaming(ctx context.Context, extProcReqCtx *envoyhandlers.ExtProcRequestContext, reqCtx *handlers.RequestContext) (*handlers.RequestContext, error) {
 	logger := log.FromContext(ctx).WithValues("stage", "bodyChunk")
 	logger.V(logutil.TRACE).Info("Entering HandleResponseBodyChunk")
 	response := &fwk.Response{
-		RequestId:   reqCtx.Request.Headers[reqcommon.RequestIdHeaderKey],
-		Headers:     reqCtx.Response.Headers,
-		EndOfStream: reqCtx.ResponseComplete,
+		RequestId:   extProcReqCtx.Request.Headers[reqcommon.RequestIdHeaderKey],
+		Headers:     extProcReqCtx.Response.Headers,
+		EndOfStream: extProcReqCtx.ResponseComplete,
 	}
 
 	d.runResponseStreamingPlugins(ctx, reqCtx.SchedulingRequest, response, reqCtx.TargetPod)
@@ -356,13 +357,13 @@ func (d *Director) HandleResponseBodyStreaming(ctx context.Context, reqCtx *hand
 }
 
 // HandleResponseBodyComplete is called when the response body is fully received.
-func (d *Director) HandleResponseBodyComplete(ctx context.Context, reqCtx *handlers.RequestContext) (*handlers.RequestContext, error) {
+func (d *Director) HandleResponseBodyComplete(ctx context.Context, extProcReqCtx *envoyhandlers.ExtProcRequestContext, reqCtx *handlers.RequestContext) (*handlers.RequestContext, error) {
 	logger := log.FromContext(ctx).WithValues("stage", "bodyChunk")
 	logger.V(logutil.DEBUG).Info("Entering HandleResponseBodyComplete")
 	response := &fwk.Response{
-		RequestId:       reqCtx.Request.Headers[reqcommon.RequestIdHeaderKey],
-		Headers:         reqCtx.Response.Headers,
-		DynamicMetadata: reqCtx.Response.DynamicMetadata,
+		RequestId:       extProcReqCtx.Request.Headers[reqcommon.RequestIdHeaderKey],
+		Headers:         extProcReqCtx.Response.Headers,
+		DynamicMetadata: extProcReqCtx.Response.DynamicMetadata,
 		Usage:           reqCtx.Usage,
 	}
 

@@ -23,6 +23,7 @@ import (
 	"github.com/go-logr/logr"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
+	envoyhandlers "sigs.k8s.io/gateway-api-inference-extension/pkg/common/envoy/handlers"
 	errcommon "sigs.k8s.io/gateway-api-inference-extension/pkg/common/error"
 	logutil "sigs.k8s.io/gateway-api-inference-extension/pkg/common/observability/logging"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/flowcontrol/contracts"
@@ -50,6 +51,7 @@ type AdmissionController interface {
 	//   - errcommon.Error: If the request is rejected.
 	Admit(
 		ctx context.Context,
+		extProcReqCtx *envoyhandlers.ExtProcRequestContext,
 		reqCtx *handlers.RequestContext,
 		priority int,
 	) error
@@ -66,12 +68,13 @@ func rejectIfSheddableAndSaturated(
 	ctx context.Context,
 	sd contracts.SaturationDetector,
 	locator contracts.PodLocator,
+	extProcReqCtx *envoyhandlers.ExtProcRequestContext,
 	reqCtx *handlers.RequestContext,
 	priority int,
 	logger logr.Logger,
 ) error {
 	if requtil.IsSheddable(priority) {
-		if sd.Saturation(ctx, locator.Locate(ctx, reqCtx.Request.Metadata)) >= 1.0 {
+		if sd.Saturation(ctx, locator.Locate(ctx, extProcReqCtx.Request.Metadata)) >= 1.0 {
 			logger.V(logutil.TRACE).Info("Request rejected: system saturated and request is sheddable",
 				"requestID", reqCtx.SchedulingRequest.RequestId)
 			return errcommon.Error{
@@ -108,6 +111,7 @@ func NewLegacyAdmissionController(
 // It checks for saturation only for requests with priority < 0.
 func (lac *LegacyAdmissionController) Admit(
 	ctx context.Context,
+	extProcReqCtx *envoyhandlers.ExtProcRequestContext,
 	reqCtx *handlers.RequestContext,
 	priority int,
 ) error {
@@ -118,7 +122,7 @@ func (lac *LegacyAdmissionController) Admit(
 		ctx,
 		lac.saturationDetector,
 		lac.podLocator,
-		reqCtx, priority,
+		extProcReqCtx, reqCtx, priority,
 		logger,
 	); err != nil {
 		return err
@@ -148,6 +152,7 @@ func NewFlowControlAdmissionController(fc flowController, poolName string) *Flow
 // deferring to the Flow Control system.
 func (fcac *FlowControlAdmissionController) Admit(
 	ctx context.Context,
+	extProcReqCtx *envoyhandlers.ExtProcRequestContext,
 	reqCtx *handlers.RequestContext,
 	priority int,
 ) error {
@@ -158,10 +163,10 @@ func (fcac *FlowControlAdmissionController) Admit(
 	fcReq := &flowControlRequest{
 		fairnessID:        reqCtx.FairnessID,
 		priority:          priority,
-		requestByteSize:   uint64(reqCtx.RequestSize),
+		requestByteSize:   uint64(len(extProcReqCtx.Request.RawBody)),
 		inferenceRequest:  reqCtx.SchedulingRequest,
-		receivedTimestamp: reqCtx.RequestReceivedTimestamp,
-		reqMetadata:       reqCtx.Request.Metadata,
+		receivedTimestamp: extProcReqCtx.RequestReceivedTimestamp,
+		reqMetadata:       extProcReqCtx.Request.Metadata,
 		inferencePoolName: fcac.poolName,
 		modelName:         reqCtx.IncomingModelName,
 	}
