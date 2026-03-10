@@ -38,6 +38,7 @@ import (
 
 	v1 "sigs.k8s.io/gateway-api-inference-extension/api/v1"
 	"sigs.k8s.io/gateway-api-inference-extension/apix/v1alpha2"
+	envoyhandlers "sigs.k8s.io/gateway-api-inference-extension/pkg/common/envoy/handlers"
 	errcommon "sigs.k8s.io/gateway-api-inference-extension/pkg/common/error"
 	logutil "sigs.k8s.io/gateway-api-inference-extension/pkg/common/observability/logging"
 	reqcommon "sigs.k8s.io/gateway-api-inference-extension/pkg/common/request"
@@ -66,7 +67,7 @@ type mockAdmissionController struct {
 	admitErr error
 }
 
-func (m *mockAdmissionController) Admit(context.Context, *handlers.RequestContext, int) error {
+func (m *mockAdmissionController) Admit(context.Context, *envoyhandlers.ExtProcRequestContext, *handlers.RequestContext, int) error {
 	return m.admitErr
 }
 
@@ -667,29 +668,31 @@ func TestDirector_HandleRequest(t *testing.T) {
 					director.podLocator = NewCachedPodLocator(context.Background(), NewDatastorePodLocator(mockDs), time.Minute)
 				}
 
-				reqCtx := &handlers.RequestContext{
-					Request: &handlers.Request{
+				extProcReqCtx := &envoyhandlers.ExtProcRequestContext{
+					Request: &envoyhandlers.Request{
 						Headers: map[string]string{
 							reqcommon.RequestIdHeaderKey: "test-req-id-" + test.name, // Ensure a default request ID
 						},
 					},
+				}
+				reqCtx := &handlers.RequestContext{
 					ObjectiveKey:    test.inferenceObjectiveName,
 					TargetModelName: test.initialTargetModelName,
 				}
 				var err error
-				reqCtx.Request.RawBody, err = json.Marshal(test.reqBodyMap)
+				extProcReqCtx.Request.RawBody, err = json.Marshal(test.reqBodyMap)
 				if err != nil {
 					t.Fatalf("Error parsing the reqBodyMap, err is %v", err)
 				}
 
 				// Add appropriate path header based on request body content for path-based API detection
 				if _, hasPrompt := test.reqBodyMap["prompt"]; hasPrompt {
-					reqCtx.Request.Headers[":path"] = "/v1/completions"
+					extProcReqCtx.Request.Headers[":path"] = "/v1/completions"
 				} else if _, hasMessages := test.reqBodyMap["messages"]; hasMessages {
-					reqCtx.Request.Headers[":path"] = "/v1/chat/completions"
+					extProcReqCtx.Request.Headers[":path"] = "/v1/chat/completions"
 				}
 
-				returnedReqCtx, err := director.HandleRequest(ctx, reqCtx)
+				err = director.HandleRequest(ctx, extProcReqCtx, reqCtx)
 
 				if test.wantErrCode != "" {
 					assert.Error(t, err, "HandleRequest() should have returned an error")
@@ -703,25 +706,24 @@ func TestDirector_HandleRequest(t *testing.T) {
 				assert.NoError(t, err, "HandleRequest() returned unexpected error")
 
 				if test.wantReqCtx != nil {
-					assert.Equal(t, test.wantReqCtx.ObjectiveKey, returnedReqCtx.ObjectiveKey, "reqCtx.Model mismatch")
-					assert.Equal(t, test.wantReqCtx.TargetModelName, returnedReqCtx.TargetModelName,
+					assert.Equal(t, test.wantReqCtx.ObjectiveKey, reqCtx.ObjectiveKey, "reqCtx.Model mismatch")
+					assert.Equal(t, test.wantReqCtx.TargetModelName, reqCtx.TargetModelName,
 						"reqCtx.ResolvedTargetModel mismatch")
-					if diff := cmp.Diff(test.wantReqCtx.TargetPod, returnedReqCtx.TargetPod, cmpopts.EquateEmpty()); diff != "" {
+					if diff := cmp.Diff(test.wantReqCtx.TargetPod, reqCtx.TargetPod, cmpopts.EquateEmpty()); diff != "" {
 						t.Errorf("reqCtx.TargetPod mismatch (-want +got):\n%s", diff)
 					}
-					assert.Equal(t, test.wantReqCtx.TargetEndpoint, returnedReqCtx.TargetEndpoint, "reqCtx.TargetEndpoint mismatch")
+					assert.Equal(t, test.wantReqCtx.TargetEndpoint, reqCtx.TargetEndpoint, "reqCtx.TargetEndpoint mismatch")
 				}
 
 				if test.wantMutatedBodyModel != "" {
-					assert.NotEmpty(t, returnedReqCtx.Request.RawBody, "Expected mutated body, but reqCtx.Request.Body is nil")
+					assert.NotEmpty(t, extProcReqCtx.Request.RawBody, "Expected mutated body, but reqCtx.Request.Body is nil")
 					updatedBodyMap := make(map[string]any)
-					if err := json.Unmarshal(reqCtx.Request.RawBody, &updatedBodyMap); err != nil {
+					if err := json.Unmarshal(extProcReqCtx.Request.RawBody, &updatedBodyMap); err != nil {
 						t.Errorf("Error to Unmarshal reqCtx.Request.UpdatedBody, err is %v", err)
 					}
 					assert.Equal(t, test.wantMutatedBodyModel, updatedBodyMap["model"],
 						"Mutated reqCtx.Request.Body model mismatch")
 				}
-				assert.Equal(t, len(reqCtx.Request.RawBody), reqCtx.RequestSize)
 			})
 		}
 	}
@@ -1079,20 +1081,21 @@ func TestDirector_HandleResponseReceived(t *testing.T) {
 		NewConfig().WithResponseReceivedPlugins(pr1),
 	)
 
-	reqCtx := &handlers.RequestContext{
-		Request: &handlers.Request{
+	extProcReqCtx := &envoyhandlers.ExtProcRequestContext{
+		Request: &envoyhandlers.Request{
 			Headers: map[string]string{
 				reqcommon.RequestIdHeaderKey: "test-req-id-for-response",
 			},
 		},
-		Response: &handlers.Response{ // Simulate some response headers
+		Response: &envoyhandlers.Response{ // Simulate some response headers
 			Headers: map[string]string{"X-Test-Response-Header": "TestValue"},
 		},
-
+	}
+	reqCtx := &handlers.RequestContext{
 		TargetPod: &fwkdl.EndpointMetadata{NamespacedName: types.NamespacedName{Namespace: "namespace1", Name: "test-pod-name"}},
 	}
 
-	_, err := director.HandleResponseReceived(ctx, reqCtx)
+	_, err := director.HandleResponseReceived(ctx, extProcReqCtx, reqCtx)
 	if err != nil {
 		t.Fatalf("HandleResponse() returned unexpected error: %v", err)
 	}
@@ -1100,7 +1103,7 @@ func TestDirector_HandleResponseReceived(t *testing.T) {
 	if diff := cmp.Diff("test-req-id-for-response", pr1.lastRespOnResponse.RequestId); diff != "" {
 		t.Errorf("Scheduler.OnResponse RequestId mismatch (-want +got):\n%s", diff)
 	}
-	if diff := cmp.Diff(reqCtx.Response.Headers, pr1.lastRespOnResponse.Headers); diff != "" {
+	if diff := cmp.Diff(extProcReqCtx.Response.Headers, pr1.lastRespOnResponse.Headers); diff != "" {
 		t.Errorf("Scheduler.OnResponse Headers mismatch (-want +got):\n%s", diff)
 	}
 	if diff := cmp.Diff("namespace1/test-pod-name", pr1.lastTargetPodOnResponse); diff != "" {
@@ -1117,19 +1120,21 @@ func TestDirector_HandleResponseStreaming(t *testing.T) {
 	locator := NewCachedPodLocator(context.Background(), NewDatastorePodLocator(ds), time.Minute)
 	director := NewDirectorWithConfig(ds, mockSched, nil, nil, locator, NewConfig().WithResponseStreamingPlugins(ps1))
 
-	reqCtx := &handlers.RequestContext{
-		Request: &handlers.Request{
+	extProcReqCtx := &envoyhandlers.ExtProcRequestContext{
+		Request: &envoyhandlers.Request{
 			Headers: map[string]string{
 				reqcommon.RequestIdHeaderKey: "test-req-id-for-streaming",
 			},
 		},
-		Response: &handlers.Response{
+		Response: &envoyhandlers.Response{
 			Headers: map[string]string{"X-Test-Streaming-Header": "StreamValue"},
 		},
+	}
+	reqCtx := &handlers.RequestContext{
 		TargetPod: &fwkdl.EndpointMetadata{NamespacedName: types.NamespacedName{Namespace: "namespace1", Name: "test-pod-name"}},
 	}
 
-	_, err := director.HandleResponseBodyStreaming(ctx, reqCtx)
+	_, err := director.HandleResponseBodyStreaming(ctx, extProcReqCtx, reqCtx)
 	if err != nil {
 		t.Fatalf("HandleResponseBodyStreaming() returned unexpected error: %v", err)
 	}
@@ -1137,7 +1142,7 @@ func TestDirector_HandleResponseStreaming(t *testing.T) {
 	if diff := cmp.Diff("test-req-id-for-streaming", ps1.lastRespOnStreaming.RequestId); diff != "" {
 		t.Errorf("Scheduler.OnStreaming RequestId mismatch (-want +got):\n%s", diff)
 	}
-	if diff := cmp.Diff(reqCtx.Response.Headers, ps1.lastRespOnStreaming.Headers); diff != "" {
+	if diff := cmp.Diff(extProcReqCtx.Response.Headers, ps1.lastRespOnStreaming.Headers); diff != "" {
 		t.Errorf("Scheduler.OnStreaming Headers mismatch (-want +got):\n%s", diff)
 	}
 	if diff := cmp.Diff("namespace1/test-pod-name", ps1.lastTargetPodOnStreaming); diff != "" {
@@ -1154,19 +1159,21 @@ func TestDirector_HandleResponseComplete(t *testing.T) {
 	locator := NewCachedPodLocator(context.Background(), NewDatastorePodLocator(ds), time.Minute)
 	director := NewDirectorWithConfig(ds, mockSched, nil, nil, locator, NewConfig().WithResponseCompletePlugins(pc1))
 
-	reqCtx := &handlers.RequestContext{
-		Request: &handlers.Request{
+	extProcReqCtx := &envoyhandlers.ExtProcRequestContext{
+		Request: &envoyhandlers.Request{
 			Headers: map[string]string{
 				reqcommon.RequestIdHeaderKey: "test-req-id-for-complete",
 			},
 		},
-		Response: &handlers.Response{
+		Response: &envoyhandlers.Response{
 			Headers: map[string]string{"X-Test-Complete-Header": "CompleteValue"},
 		},
+	}
+	reqCtx := &handlers.RequestContext{
 		TargetPod: &fwkdl.EndpointMetadata{NamespacedName: types.NamespacedName{Namespace: "namespace1", Name: "test-pod-name"}},
 	}
 
-	_, err := director.HandleResponseBodyComplete(ctx, reqCtx)
+	_, err := director.HandleResponseBodyComplete(ctx, extProcReqCtx, reqCtx)
 	if err != nil {
 		t.Fatalf("HandleResponseBodyComplete() returned unexpected error: %v", err)
 	}
@@ -1174,7 +1181,7 @@ func TestDirector_HandleResponseComplete(t *testing.T) {
 	if diff := cmp.Diff("test-req-id-for-complete", pc1.lastRespOnComplete.RequestId); diff != "" {
 		t.Errorf("Scheduler.OnComplete RequestId mismatch (-want +got):\n%s", diff)
 	}
-	if diff := cmp.Diff(reqCtx.Response.Headers, pc1.lastRespOnComplete.Headers); diff != "" {
+	if diff := cmp.Diff(extProcReqCtx.Response.Headers, pc1.lastRespOnComplete.Headers); diff != "" {
 		t.Errorf("Scheduler.OnComplete Headers mismatch (-want +got):\n%s", diff)
 	}
 	if diff := cmp.Diff("namespace1/test-pod-name", pc1.lastTargetPodOnComplete); diff != "" {

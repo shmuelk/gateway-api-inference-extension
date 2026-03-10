@@ -27,6 +27,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"sigs.k8s.io/gateway-api-inference-extension/apix/v1alpha2"
+	envoyhandlers "sigs.k8s.io/gateway-api-inference-extension/pkg/common/envoy/handlers"
 	fwkdl "sigs.k8s.io/gateway-api-inference-extension/pkg/epp/framework/interface/datalayer"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/framework/plugins/requesthandling/parsers/openai"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/handlers"
@@ -91,10 +92,11 @@ func runStreamingTest(t *testing.T, streamingResponse bool, hasTrailers bool) {
 	director := &testDirector{}
 	ctx, cancel, ds, _ := utils.PrepareForTestStreamingServer([]*v1alpha2.InferenceObjective{model},
 		[]*v1.Pod{{ObjectMeta: metav1.ObjectMeta{Name: podName}}}, "test-pool1", namespace, poolPort)
-	streamingServer := handlers.NewStreamingServer(ds, director, openai.NewOpenAIParser())
+	handlerFactory := handlers.NewServerHandlerFactory(ds, director, openai.NewOpenAIParser())
+	processServer := envoyhandlers.NewServer(handlerFactory, "", "")
 
-	testListener, errChan := utils.SetupTestStreamingServer(t, ctx, ds, streamingServer)
-	process, conn := utils.GetStreamingServerClient(ctx, t)
+	testListener, errChan := utils.SetupTestProcessServer(t, ctx, ds, processServer)
+	process, conn := utils.GetProcessServerClient(ctx, t)
 	defer conn.Close()
 
 	// Send request headers - no response expected
@@ -298,34 +300,34 @@ type testDirector struct {
 	requestHeaders map[string]string
 }
 
-func (ts *testDirector) HandleRequest(ctx context.Context, reqCtx *handlers.RequestContext) (*handlers.RequestContext, error) {
-	ts.requestHeaders = reqCtx.Request.Headers
+func (ts *testDirector) HandleRequest(ctx context.Context, extProcReqCtx *envoyhandlers.ExtProcRequestContext, reqCtx *handlers.RequestContext) error {
+	ts.requestHeaders = extProcReqCtx.Request.Headers
 
 	bodyMap := make(map[string]any)
-	if err := json.Unmarshal(reqCtx.Request.RawBody, &bodyMap); err != nil {
-		return reqCtx, err
+	if err := json.Unmarshal(extProcReqCtx.Request.RawBody, &bodyMap); err != nil {
+		return err
 	}
 	bodyMap["model"] = "v1"
 
 	var marshalErr error
-	reqCtx.Request.RawBody, marshalErr = json.Marshal(bodyMap)
+	extProcReqCtx.Request.RawBody, marshalErr = json.Marshal(bodyMap)
 	if marshalErr != nil {
-		return reqCtx, marshalErr
+		return marshalErr
 	}
-	reqCtx.RequestSize = len(reqCtx.Request.RawBody)
+	extProcReqCtx.RequestSize = len(extProcReqCtx.Request.RawBody)
 	reqCtx.TargetEndpoint = fmt.Sprintf("%s:%d", podAddress, poolPort)
+	return nil
+}
+
+func (ts *testDirector) HandleResponseReceived(ctx context.Context, extProcReqCtx *envoyhandlers.ExtProcRequestContext, reqCtx *handlers.RequestContext) (*handlers.RequestContext, error) {
 	return reqCtx, nil
 }
 
-func (ts *testDirector) HandleResponseReceived(ctx context.Context, reqCtx *handlers.RequestContext) (*handlers.RequestContext, error) {
+func (ts *testDirector) HandleResponseBodyStreaming(ctx context.Context, extProcReqCtx *envoyhandlers.ExtProcRequestContext, reqCtx *handlers.RequestContext) (*handlers.RequestContext, error) {
 	return reqCtx, nil
 }
 
-func (ts *testDirector) HandleResponseBodyStreaming(ctx context.Context, reqCtx *handlers.RequestContext) (*handlers.RequestContext, error) {
-	return reqCtx, nil
-}
-
-func (ts *testDirector) HandleResponseBodyComplete(ctx context.Context, reqCtx *handlers.RequestContext) (*handlers.RequestContext, error) {
+func (ts *testDirector) HandleResponseBodyComplete(ctx context.Context, extProcReqCtx *envoyhandlers.ExtProcRequestContext, reqCtx *handlers.RequestContext) (*handlers.RequestContext, error) {
 	return reqCtx, nil
 }
 

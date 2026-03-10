@@ -78,13 +78,13 @@ func PrepareForTestStreamingServer(objectives []*v1alpha2.InferenceObjective, po
 	return ctx, cancel, ds, pmc
 }
 
-func SetupTestStreamingServer(t *testing.T, ctx context.Context, ds datastore.Datastore,
-	streamingServer pb.ExternalProcessorServer) (*bufconn.Listener, chan error) {
+func SetupTestProcessServer(t *testing.T, ctx context.Context, ds datastore.Datastore,
+	processServer pb.ExternalProcessorServer) (*bufconn.Listener, chan error) {
 	testListener = bufconn.Listen(bufSize)
 
 	errChan := make(chan error)
 	go func() {
-		err := LaunchTestGRPCServer(streamingServer, ctx, testListener)
+		err := LaunchTestGRPCServer(processServer, ctx, testListener)
 		if err != nil {
 			t.Error("Error launching listener", err)
 		}
@@ -99,7 +99,7 @@ func testDialer(context.Context, string) (net.Conn, error) {
 	return testListener.Dial()
 }
 
-func GetStreamingServerClient(ctx context.Context, t *testing.T) (pb.ExternalProcessor_ProcessClient, *grpc.ClientConn) {
+func GetProcessServerClient(ctx context.Context, t *testing.T) (pb.ExternalProcessor_ProcessClient, *grpc.ClientConn) {
 	opts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithContextDialer(testDialer),

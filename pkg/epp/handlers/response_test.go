@@ -23,11 +23,11 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 
+	envoyhandlers "sigs.k8s.io/gateway-api-inference-extension/pkg/common/envoy/handlers"
 	logutil "sigs.k8s.io/gateway-api-inference-extension/pkg/common/observability/logging"
 	fwkdl "sigs.k8s.io/gateway-api-inference-extension/pkg/epp/framework/interface/datalayer"
 	fwkrq "sigs.k8s.io/gateway-api-inference-extension/pkg/epp/framework/interface/requestcontrol"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/framework/plugins/requesthandling/parsers/openai"
-	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/metadata"
 )
 
 const (
@@ -128,33 +128,32 @@ data: [DONE]
 
 type mockDirector struct{}
 
-func (m *mockDirector) HandleResponseBodyStreaming(ctx context.Context, reqCtx *RequestContext) (*RequestContext, error) {
+func (m *mockDirector) HandleResponseBodyStreaming(ctx context.Context, extProcReqCtx *envoyhandlers.ExtProcRequestContext, reqCtx *RequestContext) (*RequestContext, error) {
 	return reqCtx, nil
 }
-func (m *mockDirector) HandleResponseBodyComplete(ctx context.Context, reqCtx *RequestContext) (*RequestContext, error) {
+func (m *mockDirector) HandleResponseBodyComplete(ctx context.Context, extProcReqCtx *envoyhandlers.ExtProcRequestContext, reqCtx *RequestContext) (*RequestContext, error) {
 	return reqCtx, nil
 }
-func (m *mockDirector) HandleResponseReceived(ctx context.Context, reqCtx *RequestContext) (*RequestContext, error) {
+func (m *mockDirector) HandleResponseReceived(ctx context.Context, extProcReqCtx *envoyhandlers.ExtProcRequestContext, reqCtx *RequestContext) (*RequestContext, error) {
 	return reqCtx, nil
 }
-func (m *mockDirector) HandlePreRequest(ctx context.Context, reqCtx *RequestContext) (*RequestContext, error) {
-	return reqCtx, nil
+func (m *mockDirector) HandlePreRequest(ctx context.Context, extProcReqCtx *envoyhandlers.ExtProcRequestContext, reqCtx *RequestContext) error {
+	return nil
 }
 func (m *mockDirector) GetRandomEndpoint() *fwkdl.EndpointMetadata {
 	return &fwkdl.EndpointMetadata{}
 }
-func (m *mockDirector) HandleRequest(ctx context.Context, reqCtx *RequestContext) (*RequestContext, error) {
-	return reqCtx, nil
+func (m *mockDirector) HandleRequest(ctx context.Context, extProcReqCtx *envoyhandlers.ExtProcRequestContext, reqCtx *RequestContext) error {
+	return nil
 }
 
 func TestHandleResponseBody(t *testing.T) {
 	ctx := logutil.NewTestLoggerIntoContext(context.Background())
 
 	tests := []struct {
-		name   string
-		body   []byte
-		reqCtx *RequestContext
-		want   fwkrq.Usage
+		name string
+		body []byte
+		want fwkrq.Usage
 	}{
 		{
 			name: "success",
@@ -191,22 +190,20 @@ func TestHandleResponseBody(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			server := &StreamingServer{
-				parser: openai.NewOpenAIParser(),
+			serverHandler := &ServerHandler{
+				director: &mockDirector{},
+				parser:   openai.NewOpenAIParser(),
+				reqCtx:   &RequestContext{},
 			}
-			server.director = &mockDirector{}
-			reqCtx := test.reqCtx
-			if reqCtx == nil {
-				reqCtx = &RequestContext{
-					Response: &Response{},
-				}
+			reqCtx := &envoyhandlers.ExtProcRequestContext{
+				Response: &envoyhandlers.Response{},
 			}
-			_, err := server.HandleResponseBody(ctx, reqCtx, test.body)
+			err := serverHandler.HandleResponseBody(ctx, reqCtx, test.body)
 			if err != nil {
 				t.Errorf("HandleResponseBody returned unexpected error: %v, want nil", err)
 			}
 
-			if diff := cmp.Diff(test.want, reqCtx.Usage); diff != "" {
+			if diff := cmp.Diff(test.want, serverHandler.reqCtx.Usage); diff != "" {
 				t.Errorf("HandleResponseBody returned unexpected response, diff(-want, +got): %v", diff)
 			}
 		})
@@ -254,20 +251,21 @@ func TestHandleStreamedResponseBody(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			server := &StreamingServer{
-				parser: openai.NewOpenAIParser(),
+			serverHandler := &ServerHandler{
+				director: &mockDirector{},
+				parser:   openai.NewOpenAIParser(),
+				reqCtx:   &RequestContext{},
 			}
-			server.director = &mockDirector{}
-			reqCtx := &RequestContext{
-				Response: &Response{
+			reqCtx := &envoyhandlers.ExtProcRequestContext{
+				Response: &envoyhandlers.Response{
 					Headers: map[string]string{
 						"content-type": "text/event-stream; charset=utf-8",
 					},
 				},
 			}
-			server.HandleResponseBodyModelStreaming(ctx, reqCtx, test.body, true) // Hard coded to true since openAIParser does not endOfStream to switch logic.
+			serverHandler.HandleResponseBodyModelStreaming(ctx, reqCtx, test.body, true) // Hard coded to true since openAIParser does not endOfStream to switch logic.
 
-			if diff := cmp.Diff(test.want, reqCtx.Usage); diff != "" {
+			if diff := cmp.Diff(test.want, serverHandler.reqCtx.Usage); diff != "" {
 				t.Errorf("HandleResponseBody returned unexpected response, diff(-want, +got): %v", diff)
 			}
 		})
@@ -325,12 +323,13 @@ func TestHandleResponseBodyModelStreaming_TokenAccumulation(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			server := &StreamingServer{
-				parser:   openai.NewOpenAIParser(),
+			serverHandler := &ServerHandler{
 				director: &mockDirector{},
+				parser:   openai.NewOpenAIParser(),
+				reqCtx:   &RequestContext{},
 			}
-			reqCtx := &RequestContext{
-				Response: &Response{
+			reqCtx := &envoyhandlers.ExtProcRequestContext{
+				Response: &envoyhandlers.Response{
 					Headers: map[string]string{
 						"content-type": "text/event-stream",
 					},
@@ -338,37 +337,10 @@ func TestHandleResponseBodyModelStreaming_TokenAccumulation(t *testing.T) {
 			}
 
 			for _, chunk := range tc.chunks {
-				server.HandleResponseBodyModelStreaming(context.Background(), reqCtx, chunk.body, chunk.endOfStream)
+				serverHandler.HandleResponseBodyModelStreaming(context.Background(), reqCtx, chunk.body, chunk.endOfStream)
 			}
 
-			assert.Equal(t, tc.wantUsage, reqCtx.Usage, "Usage data should match expected accumulation")
+			assert.Equal(t, tc.wantUsage, serverHandler.reqCtx.Usage, "Usage data should match expected accumulation")
 		})
 	}
-}
-
-func TestGenerateResponseHeaders_Sanitization(t *testing.T) {
-	server := &StreamingServer{}
-	reqCtx := &RequestContext{
-		Response: &Response{
-			Headers: map[string]string{
-				"x-backend-server":              "vllm-v0.6.3",            // should passthrough
-				metadata.ObjectiveKey:           "sensitive-objective-id", // should be stripped
-				metadata.DestinationEndpointKey: "10.2.0.5:8080",          // should be stripped
-				"content-length":                "500",                    // hould be stripped
-			},
-		},
-	}
-
-	results := server.generateResponseHeaders(reqCtx)
-
-	gotHeaders := make(map[string]string)
-	for _, h := range results {
-		gotHeaders[h.Header.Key] = string(h.Header.RawValue)
-	}
-
-	assert.Contains(t, gotHeaders, "x-backend-server")
-	assert.Contains(t, gotHeaders, "x-went-into-resp-headers")
-	assert.NotContains(t, gotHeaders, metadata.ObjectiveKey)
-	assert.NotContains(t, gotHeaders, metadata.DestinationEndpointKey)
-	assert.NotContains(t, gotHeaders, "content-length")
 }

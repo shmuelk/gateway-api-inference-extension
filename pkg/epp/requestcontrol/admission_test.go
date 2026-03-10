@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	envoyhandlers "sigs.k8s.io/gateway-api-inference-extension/pkg/common/envoy/handlers"
 	errcommon "sigs.k8s.io/gateway-api-inference-extension/pkg/common/error"
 	logutil "sigs.k8s.io/gateway-api-inference-extension/pkg/common/observability/logging"
 	backendmetrics "sigs.k8s.io/gateway-api-inference-extension/pkg/epp/backend/metrics"
@@ -55,11 +56,13 @@ func (m *mockFlowController) EnqueueAndWait(
 func TestLegacyAdmissionController_Admit(t *testing.T) {
 	t.Parallel()
 	ctx := logutil.NewTestLoggerIntoContext(context.Background())
-	reqCtx := &handlers.RequestContext{
-		SchedulingRequest: &schedulingtypes.LLMRequest{RequestId: "test-req"},
-		Request: &handlers.Request{
+	extProcReqCtx := &envoyhandlers.ExtProcRequestContext{
+		Request: &envoyhandlers.Request{
 			Metadata: map[string]any{},
 		},
+	}
+	reqCtx := &handlers.RequestContext{
+		SchedulingRequest: &schedulingtypes.LLMRequest{RequestId: "test-req"},
 	}
 
 	mockPods := []backendmetrics.PodMetrics{&backendmetrics.FakePodMetrics{}}
@@ -121,7 +124,7 @@ func TestLegacyAdmissionController_Admit(t *testing.T) {
 			locator := &mocks.MockPodLocator{Pods: tc.locatorPods}
 			ac := NewLegacyAdmissionController(mockDetector, locator)
 
-			err := ac.Admit(ctx, reqCtx, tc.priority)
+			err := ac.Admit(ctx, extProcReqCtx, reqCtx, tc.priority)
 
 			if !tc.expectErr {
 				assert.NoError(t, err, "Admit() should not have returned an error for scenario: %s", tc.name)
@@ -181,11 +184,13 @@ func TestFlowControlRequestAdapter(t *testing.T) {
 func TestFlowControlAdmissionController_Admit(t *testing.T) {
 	t.Parallel()
 	ctx := logutil.NewTestLoggerIntoContext(context.Background())
-	reqCtx := &handlers.RequestContext{
-		SchedulingRequest: &schedulingtypes.LLMRequest{RequestId: "test-req"},
-		Request: &handlers.Request{
+	extProcReqCtx := &envoyhandlers.ExtProcRequestContext{
+		Request: &envoyhandlers.Request{
 			Metadata: map[string]any{},
 		},
+	}
+	reqCtx := &handlers.RequestContext{
+		SchedulingRequest: &schedulingtypes.LLMRequest{RequestId: "test-req"},
 	}
 
 	testCases := []struct {
@@ -267,7 +272,7 @@ func TestFlowControlAdmissionController_Admit(t *testing.T) {
 			fc := &mockFlowController{outcome: tc.fcOutcome, err: tc.fcErr}
 			ac := NewFlowControlAdmissionController(fc, "pool")
 
-			err := ac.Admit(ctx, reqCtx, tc.priority)
+			err := ac.Admit(ctx, extProcReqCtx, reqCtx, tc.priority)
 
 			assert.True(t, fc.called, "FlowController should have been called for scenario: %s", tc.name)
 

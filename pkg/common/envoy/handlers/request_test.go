@@ -22,6 +22,7 @@ import (
 
 	configPb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	extProcPb "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/types/known/structpb"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/metadata"
@@ -56,8 +57,9 @@ func TestHandleRequestHeaders(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			server := &StreamingServer{}
-			reqCtx := &RequestContext{
+			server := &Server{}
+			reqCtx := &ExtProcRequestContext{
+				handler: &testServerHandler{},
 				Request: &Request{Headers: make(map[string]string)},
 			}
 			req := &extProcPb.ProcessingRequest_RequestHeaders{
@@ -66,10 +68,8 @@ func TestHandleRequestHeaders(t *testing.T) {
 				},
 			}
 
-			err := server.HandleRequestHeaders(context.Background(), reqCtx, req)
-			assert.NoError(t, err, "HandleRequestHeaders should not return an error")
-
-			assert.Equal(t, tc.wantFairnessID, reqCtx.FairnessID, "FairnessID should match expected value")
+			err := server.handleRequestHeaders(reqCtx, req)
+			assert.NoError(t, err, "handleRequestHeaders should not return an error")
 
 			if tc.wantHeaders != nil {
 				for k, v := range tc.wantHeaders {
@@ -81,10 +81,10 @@ func TestHandleRequestHeaders(t *testing.T) {
 }
 
 func TestGenerateHeaders_Sanitization(t *testing.T) {
-	server := &StreamingServer{}
-	reqCtx := &RequestContext{
-		TargetEndpoint: "1.2.3.4:8080",
-		RequestSize:    123,
+	server := &Server{}
+	targetEndpoint := "1.2.3.4:8080"
+	requestSize := 123
+	reqCtx := &ExtProcRequestContext{
 		Request: &Request{
 			Headers: map[string]string{
 				"x-user-data":                   "important",              // should passthrough
@@ -92,10 +92,13 @@ func TestGenerateHeaders_Sanitization(t *testing.T) {
 				metadata.DestinationEndpointKey: "1.1.1.1:666",            // should be stripped
 				"content-length":                "99999",                  // should be stripped (re-added by logic)
 			},
+			AddedHeaders: map[string]string{
+				metadata.DestinationEndpointKey: targetEndpoint,
+			},
 		},
 	}
 
-	results := server.generateHeaders(context.Background(), reqCtx)
+	results := server.generateHeaders(context.Background(), reqCtx, requestSize)
 
 	gotHeaders := make(map[string]string)
 	for _, h := range results {
@@ -111,11 +114,23 @@ func TestGenerateHeaders_Sanitization(t *testing.T) {
 func TestGenerateRequestHeaderResponse_MergeMetadata(t *testing.T) {
 	t.Parallel()
 
-	server := &StreamingServer{}
-	reqCtx := &RequestContext{
-		TargetEndpoint: "1.2.3.4:8080",
+	server := &Server{}
+	reqCtx := &ExtProcRequestContext{
 		Request: &Request{
 			Headers: make(map[string]string),
+			DynamicMetadata: &structpb.Struct{
+				Fields: map[string]*structpb.Value{
+					"new_namespace": {
+						Kind: &structpb.Value_StructValue{
+							StructValue: &structpb.Struct{
+								Fields: map[string]*structpb.Value{
+									"new_key": {Kind: &structpb.Value_StringValue{StringValue: "new_value"}},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 		Response: &Response{
 			DynamicMetadata: &structpb.Struct{
@@ -134,7 +149,7 @@ func TestGenerateRequestHeaderResponse_MergeMetadata(t *testing.T) {
 		},
 	}
 
-	resp := server.generateRequestHeaderResponse(context.Background(), reqCtx)
+	resp := server.generateRequestHeaderResponse(context.Background(), reqCtx, 123)
 
 	// Check that the existing metadata is preserved
 	existingNamespace, ok := resp.DynamicMetadata.Fields["existing_namespace"]
@@ -144,9 +159,36 @@ func TestGenerateRequestHeaderResponse_MergeMetadata(t *testing.T) {
 	assert.Equal(t, "existing_value", existingKey.GetStringValue(), "Unexpected value for existing_key")
 
 	// Check that the new metadata is added
-	endpointNamespace, ok := resp.DynamicMetadata.Fields[metadata.DestinationEndpointNamespace]
-	assert.True(t, ok, "Expected DestinationEndpointNamespace to be in DynamicMetadata")
-	endpointKey, ok := endpointNamespace.GetStructValue().Fields[metadata.DestinationEndpointKey]
-	assert.True(t, ok, "Expected DestinationEndpointKey to be in DestinationEndpointNamespace")
-	assert.Equal(t, "1.2.3.4:8080", endpointKey.GetStringValue(), "Unexpected value for DestinationEndpointKey")
+	newNamespace, ok := resp.DynamicMetadata.Fields["new_namespace"]
+	assert.True(t, ok, "Expected new_namespace to be in DynamicMetadata")
+	newKey, ok := newNamespace.GetStructValue().Fields["new_key"]
+	assert.True(t, ok, "Expected new_key to be in DestinationEndpointNamespace")
+	assert.Equal(t, "new_value", newKey.GetStringValue(), "Unexpected value for new_key")
 }
+
+type testServerHandler struct{}
+
+func (tsh *testServerHandler) HandleRequestHeaders(reqCtx *ExtProcRequestContext, endOfStream bool) error {
+	return nil
+}
+
+func (tsh *testServerHandler) HandleRequest(ctx context.Context, reqCtx *ExtProcRequestContext) error {
+	return nil
+}
+
+func (tsh *testServerHandler) HandleResponseReceived(ctx context.Context, reqCtx *ExtProcRequestContext) error {
+	return nil
+}
+
+func (tsh *testServerHandler) HandleResponseBody(ctx context.Context, reqCtx *ExtProcRequestContext, responseBytes []byte) error {
+	return nil
+}
+
+func (tsh *testServerHandler) HandleResponseBodyModelStreaming(ctx context.Context, reqCtx *ExtProcRequestContext, responseBytes []byte, endOfStream bool) {
+}
+
+func (tsh *testServerHandler) ResponseSent(reqCtx *ExtProcRequestContext) {}
+
+func (tsh *testServerHandler) RequestEnded(err error, reqCtx *ExtProcRequestContext) {}
+
+func (tsh *testServerHandler) SetLogger(logger logr.Logger) {}
