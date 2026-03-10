@@ -1,0 +1,428 @@
+/*
+Copyright 2026 The Kubernetes Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package handlers
+
+import (
+	"context"
+	"io"
+	"strings"
+	"time"
+
+	extProcPb "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+	envoyTypePb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
+	"github.com/go-logr/logr"
+	"github.com/google/uuid"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/structpb"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+
+	reqenvoy "sigs.k8s.io/gateway-api-inference-extension/pkg/common/envoy/request"
+	errcommon "sigs.k8s.io/gateway-api-inference-extension/pkg/common/error"
+	logutil "sigs.k8s.io/gateway-api-inference-extension/pkg/common/observability/logging"
+	reqcommon "sigs.k8s.io/gateway-api-inference-extension/pkg/common/request"
+)
+
+type Handler interface {
+	HandleRequestHeaders(reqCtx *ExtProcRequestContext, endOfStream bool) error
+	HandleRequest(ctx context.Context, reqCtx *ExtProcRequestContext) error
+	HandleResponseReceived(ctx context.Context, reqCtx *ExtProcRequestContext) error
+	HandleResponseBody(ctx context.Context, reqCtx *ExtProcRequestContext, responseBytes []byte) error
+	HandleResponseBodyModelStreaming(ctx context.Context, reqCtx *ExtProcRequestContext, responseBytes []byte, endOfStream bool)
+	ResponseSent(reqCtx *ExtProcRequestContext)
+	RequestEnded(err error, reqCtx *ExtProcRequestContext)
+	SetLogger(logger logr.Logger)
+}
+
+type HandlerFactory interface {
+	CreateHandler(logger logr.Logger) Handler
+}
+
+type Server struct {
+	handlerFactory HandlerFactory
+	tracerName     string
+	spanName       string
+}
+
+// ExtProcRequestContext stores context information during the life time of an ext proc gRPC request.
+type ExtProcRequestContext struct {
+	handler Handler
+
+	RequestReceivedTimestamp  time.Time
+	ResponseCompleteTimestamp time.Time
+	RequestSize               int
+	ResponseSize              int
+	ResponseComplete          bool
+	ResponseStatusCode        string
+	RequestRunning            bool
+	Request                   *Request
+	RequestState              StreamRequestState
+	modelServerStreaming      bool
+	Response                  *Response
+
+	reqHeaderResp  *extProcPb.ProcessingResponse
+	reqBodyResp    []*extProcPb.ProcessingResponse
+	reqTrailerResp *extProcPb.ProcessingResponse
+
+	respHeaderResp  *extProcPb.ProcessingResponse
+	respBodyResp    []*extProcPb.ProcessingResponse
+	respTrailerResp *extProcPb.ProcessingResponse
+}
+
+type Request struct {
+	Headers         map[string]string
+	RawBody         []byte // This field will be updated when request body is modified (e.g. model mutation in requestBody)
+	Metadata        map[string]any
+	AddedHeaders    map[string]string
+	DynamicMetadata *structpb.Struct
+}
+type Response struct {
+	Headers         map[string]string
+	DynamicMetadata *structpb.Struct
+}
+type StreamRequestState int
+
+const (
+	RequestReceived                  StreamRequestState = 0
+	HeaderRequestResponseComplete    StreamRequestState = 1
+	BodyRequestResponsesComplete     StreamRequestState = 2
+	TrailerRequestResponsesComplete  StreamRequestState = 3
+	ResponseReceived                 StreamRequestState = 4
+	HeaderResponseResponseComplete   StreamRequestState = 5
+	BodyResponseResponsesComplete    StreamRequestState = 6
+	TrailerResponseResponsesComplete StreamRequestState = 7
+)
+
+func NewServer(handlerFactory HandlerFactory, tracerName string, spanName string) *Server {
+	return &Server{
+		handlerFactory: handlerFactory,
+		tracerName:     tracerName,
+		spanName:       spanName,
+	}
+}
+
+func (s *Server) Process(srv extProcPb.ExternalProcessor_ProcessServer) error {
+	ctx := srv.Context()
+
+	if len(s.tracerName) != 0 {
+		// Start tracing span for the request
+		tracer := otel.Tracer(s.tracerName)
+		var span trace.Span
+		ctx, span = tracer.Start(ctx, s.spanName, trace.WithSpanKind(trace.SpanKindServer))
+		defer span.End()
+	}
+
+	logger := log.FromContext(ctx)
+	loggerTrace := logger.V(logutil.TRACE)
+	loggerTrace.Info("Processing")
+
+	// Create request context to share states during life time of an HTTP request.
+	// See https://github.com/envoyproxy/envoy/issues/17540.
+	reqCtx := &ExtProcRequestContext{
+		handler:      s.handlerFactory.CreateHandler(logger),
+		RequestState: RequestReceived,
+		Request: &Request{
+			Headers:      make(map[string]string),
+			Metadata:     make(map[string]any),
+			AddedHeaders: make(map[string]string),
+		},
+		Response: &Response{
+			Headers: make(map[string]string),
+		},
+	}
+
+	var body []byte
+
+	// Create error handling var as each request should only report once for
+	// error metrics. This doesn't cover the error "Cannot receive stream request" because
+	// such errors might happen even though response is processed.
+	var err error
+	defer func() {
+		reqCtx.handler.RequestEnded(err, reqCtx)
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		req, recvErr := srv.Recv()
+		if recvErr == io.EOF || status.Code(recvErr) == codes.Canceled {
+			return nil
+		}
+		if recvErr != nil {
+			return status.Errorf(codes.Unknown, "cannot receive stream request: %v", err)
+		}
+
+		reqCtx.Request.Metadata = reqenvoy.ExtractMetadataValues(req)
+
+		switch v := req.Request.(type) {
+		case *extProcPb.ProcessingRequest_RequestHeaders:
+			requestID := reqenvoy.ExtractHeaderValue(v, reqcommon.RequestIdHeaderKey)
+			// request ID is a must for maintaining a state per request in plugins that hold internal state and use PluginState.
+			// if request id was not supplied as a header, we generate it ourselves.
+			if len(requestID) == 0 {
+				requestID = uuid.NewString()
+				loggerTrace.Info("RequestID header is not found in the request, generated a request id")
+				reqCtx.Request.Headers[reqcommon.RequestIdHeaderKey] = requestID // update in headers so director can consume it
+			}
+			logger = logger.WithValues(reqcommon.RequestIdHeaderKey, requestID)
+			logger.V(1).Info("received request") // Request ID will be logged too as part of logger context values.
+			loggerTrace = logger.V(logutil.TRACE)
+			ctx = log.IntoContext(ctx, logger)
+
+			err = s.handleRequestHeaders(reqCtx, v)
+
+		case *extProcPb.ProcessingRequest_RequestBody:
+			loggerTrace.Info("Incoming body chunk", "EoS", v.RequestBody.EndOfStream)
+			// In the stream case, we can receive multiple request bodies.
+			body = append(body, v.RequestBody.Body...)
+
+			// Message is buffered, we can read and decode.
+			if v.RequestBody.EndOfStream {
+				loggerTrace.Info("decoding")
+				reqCtx.Request.RawBody = body
+
+				// Body stream complete. Capture raw size for flow control.
+				reqCtx.RequestSize = len(body)
+				body = []byte{}
+
+				err = reqCtx.handler.HandleRequest(ctx, reqCtx)
+				if err != nil {
+					logger.V(1).Error(err, "Error handling request")
+					break
+				}
+
+				// Update RequestSize to match marshalled body for Content-Length header.
+				reqCtx.reqHeaderResp = s.generateRequestHeaderResponse(ctx, reqCtx, reqCtx.RequestSize)
+				reqCtx.reqBodyResp = s.generateRequestBodyResponses(reqCtx.Request.RawBody)
+			}
+
+		case *extProcPb.ProcessingRequest_RequestTrailers:
+			// This is currently unused.
+
+		case *extProcPb.ProcessingRequest_ResponseHeaders:
+			for _, header := range v.ResponseHeaders.Headers.GetHeaders() {
+				value := string(header.RawValue)
+				loggerTrace.Info("header", "key", header.Key, "value", value)
+				if header.Key == "status" && value != "200" {
+					reqCtx.ResponseStatusCode = errcommon.ModelServerError
+				} else if header.Key == "content-type" && strings.Contains(value, "text/event-stream") {
+					reqCtx.modelServerStreaming = true
+					loggerTrace.Info("model server is streaming response")
+				}
+			}
+			reqCtx.RequestState = ResponseReceived
+
+			responseErr := s.handleResponseHeaders(ctx, reqCtx, v)
+			if responseErr != nil {
+				if logger.V(logutil.DEBUG).Enabled() {
+					logger.V(logutil.DEBUG).Error(responseErr, "Failed to process response headers", "request", req)
+				} else {
+					logger.V(1).Error(responseErr, "Failed to process response headers")
+				}
+			}
+			reqCtx.respHeaderResp = s.generateResponseHeaderResponse(reqCtx)
+
+		case *extProcPb.ProcessingRequest_ResponseBody:
+			reqCtx.ResponseComplete = v.ResponseBody.EndOfStream
+			if reqCtx.ResponseComplete {
+				loggerTrace.Info("stream completed")
+				reqCtx.ResponseCompleteTimestamp = time.Now()
+			}
+			if reqCtx.modelServerStreaming {
+				// Currently we punt on response parsing if the modelServer is streaming, and we just passthrough.
+				reqCtx.handler.HandleResponseBodyModelStreaming(ctx, reqCtx, v.ResponseBody.Body, v.ResponseBody.EndOfStream)
+				reqCtx.respBodyResp = generateResponseBodyResponses(v.ResponseBody.Body, v.ResponseBody.EndOfStream)
+			} else {
+				body = append(body, v.ResponseBody.Body...)
+
+				// Message is buffered, we can read and decode.
+				if v.ResponseBody.EndOfStream {
+					reqCtx.ResponseSize = len(body)
+					reqCtx.respBodyResp = generateResponseBodyResponses(body, true)
+					responseErr := reqCtx.handler.HandleResponseBody(ctx, reqCtx, body)
+					if responseErr != nil {
+						break
+					}
+				}
+			}
+
+		case *extProcPb.ProcessingRequest_ResponseTrailers:
+			// This is currently unused.
+		}
+
+		// Handle the err and fire an immediate response.
+		if err != nil {
+			if logger.V(logutil.DEBUG).Enabled() {
+				logger.V(logutil.DEBUG).Error(err, "Failed to process request", "request", req)
+			} else {
+				logger.V(1).Error(err, "Failed to process request")
+			}
+			resp, responseErr := buildErrResponse(err)
+			if responseErr != nil {
+				return responseErr
+			}
+			if sendErr := srv.Send(resp); sendErr != nil {
+				logger.V(1).Error(err, "Send failed")
+				return status.Errorf(codes.Unknown, "failed to send response back to Envoy: %v", sendErr)
+			}
+			return nil
+		}
+		loggerTrace.Info("checking", "request state", reqCtx.RequestState)
+		if err := reqCtx.updateStateAndSendIfNeeded(srv, logger); err != nil {
+			return err
+		}
+	}
+}
+
+func (s *Server) handleRequestHeaders(reqCtx *ExtProcRequestContext, req *extProcPb.ProcessingRequest_RequestHeaders) error {
+	reqCtx.RequestReceivedTimestamp = time.Now()
+
+	for _, header := range req.RequestHeaders.Headers.Headers {
+		value := reqenvoy.GetHeaderValue(header)
+		reqCtx.Request.Headers[header.Key] = value
+	}
+	return reqCtx.handler.HandleRequestHeaders(reqCtx, req.RequestHeaders.EndOfStream)
+}
+
+// updateStateAndSendIfNeeded checks state and can send mutiple responses in a single pass, but only if ordered properly.
+// Order of requests matter in FULL_DUPLEX_STREAMING. For both request and response, the order of response sent back MUST be: Header->Body->Trailer, with trailer being optional.
+func (r *ExtProcRequestContext) updateStateAndSendIfNeeded(srv extProcPb.ExternalProcessor_ProcessServer, logger logr.Logger) error {
+	loggerTrace := logger.V(logutil.TRACE)
+	// No switch statement as we could send multiple responses in one pass.
+	if r.RequestState == RequestReceived && r.reqHeaderResp != nil {
+		loggerTrace.Info("Sending request header response", "obj", r.reqHeaderResp)
+		if err := srv.Send(r.reqHeaderResp); err != nil {
+			logger.V(1).Error(err, "error sending response")
+			return status.Errorf(codes.Unknown, "failed to send response back to Envoy: %v", err)
+		}
+		r.RequestState = HeaderRequestResponseComplete
+	}
+	if r.RequestState == HeaderRequestResponseComplete && r.reqBodyResp != nil && len(r.reqBodyResp) > 0 {
+		loggerTrace.Info("Sending request body response(s)")
+
+		for _, response := range r.reqBodyResp {
+			if err := srv.Send(response); err != nil {
+				return status.Errorf(codes.Unknown, "failed to send response back to Envoy: %v", err)
+			}
+		}
+		r.handler.ResponseSent(r)
+		r.RequestState = BodyRequestResponsesComplete
+		r.RequestRunning = true
+		// Dump the response so a new stream message can begin
+		r.reqBodyResp = nil
+	}
+	if r.RequestState == BodyRequestResponsesComplete && r.reqTrailerResp != nil {
+		// Trailers in requests are not guaranteed
+		if err := srv.Send(r.reqTrailerResp); err != nil {
+			return status.Errorf(codes.Unknown, "failed to send response back to Envoy: %v", err)
+		}
+	}
+	if r.RequestState == ResponseReceived && r.respHeaderResp != nil {
+		loggerTrace.Info("Sending response header response", "obj", r.respHeaderResp)
+		if err := srv.Send(r.respHeaderResp); err != nil {
+			return status.Errorf(codes.Unknown, "failed to send response back to Envoy: %v", err)
+		}
+		r.RequestState = HeaderResponseResponseComplete
+	}
+	if r.RequestState == HeaderResponseResponseComplete {
+		loggerTrace.Info("Sending response body response(s)")
+		for _, response := range r.respBodyResp {
+			if err := srv.Send(response); err != nil {
+				return status.Errorf(codes.Unknown, "failed to send response back to Envoy: %v", err)
+			}
+		}
+		if r.ResponseComplete {
+			logger.V(1).Info("EPP sent response body back to proxy")
+			r.RequestState = BodyResponseResponsesComplete
+		}
+		// Dump the response so a new stream message can begin
+		r.respBodyResp = nil
+	}
+	if r.RequestState == BodyResponseResponsesComplete && r.respTrailerResp != nil {
+		// Trailers in requests are not guaranteed
+		if err := srv.Send(r.respTrailerResp); err != nil {
+			return status.Errorf(codes.Unknown, "failed to send response back to Envoy: %v", err)
+		}
+	}
+	return nil
+}
+
+func buildErrResponse(err error) (*extProcPb.ProcessingResponse, error) {
+	var resp *extProcPb.ProcessingResponse
+
+	switch errcommon.CanonicalCode(err) {
+	// This code can be returned by scheduler when there is no capacity for sheddable
+	// requests.
+	case errcommon.ResourceExhausted:
+		resp = &extProcPb.ProcessingResponse{
+			Response: &extProcPb.ProcessingResponse_ImmediateResponse{
+				ImmediateResponse: &extProcPb.ImmediateResponse{
+					Status: &envoyTypePb.HttpStatus{
+						Code: envoyTypePb.StatusCode_TooManyRequests,
+					},
+				},
+			},
+		}
+	// This code can be returned by when EPP processes the request and run into server-side errors.
+	case errcommon.Internal:
+		resp = &extProcPb.ProcessingResponse{
+			Response: &extProcPb.ProcessingResponse_ImmediateResponse{
+				ImmediateResponse: &extProcPb.ImmediateResponse{
+					Status: &envoyTypePb.HttpStatus{
+						Code: envoyTypePb.StatusCode_InternalServerError,
+					},
+				},
+			},
+		}
+	// This code can be returned by the director when there are no candidate pods for the request scheduling.
+	case errcommon.ServiceUnavailable:
+		resp = &extProcPb.ProcessingResponse{
+			Response: &extProcPb.ProcessingResponse_ImmediateResponse{
+				ImmediateResponse: &extProcPb.ImmediateResponse{
+					Status: &envoyTypePb.HttpStatus{
+						Code: envoyTypePb.StatusCode_ServiceUnavailable,
+					},
+				},
+			},
+		}
+	// This code can be returned when users provide invalid json request.
+	case errcommon.BadRequest:
+		resp = &extProcPb.ProcessingResponse{
+			Response: &extProcPb.ProcessingResponse_ImmediateResponse{
+				ImmediateResponse: &extProcPb.ImmediateResponse{
+					Status: &envoyTypePb.HttpStatus{
+						Code: envoyTypePb.StatusCode_BadRequest,
+					},
+				},
+			},
+		}
+	default:
+		return nil, status.Errorf(status.Code(err), "failed to handle request: %v", err)
+	}
+
+	if err.Error() != "" {
+		resp.Response.(*extProcPb.ProcessingResponse_ImmediateResponse).ImmediateResponse.Body = []byte(err.Error())
+	}
+
+	return resp, nil
+}
