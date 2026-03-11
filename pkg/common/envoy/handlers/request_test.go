@@ -59,7 +59,7 @@ func TestHandleRequestHeaders(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			server := &Server{}
 			reqCtx := &ExtProcRequestContext{
-				handler: &testServerHandler{},
+				handler: &dummyServerHandler{},
 				Request: &Request{Headers: make(map[string]string)},
 			}
 			req := &extProcPb.ProcessingRequest_RequestHeaders{
@@ -166,29 +166,29 @@ func TestGenerateRequestHeaderResponse_MergeMetadata(t *testing.T) {
 	assert.Equal(t, "new_value", newKey.GetStringValue(), "Unexpected value for new_key")
 }
 
-type testServerHandler struct{}
+type dummyServerHandler struct{}
 
-func (tsh *testServerHandler) HandleRequestHeaders(reqCtx *ExtProcRequestContext, endOfStream bool) error {
+func (dsh *dummyServerHandler) HandleRequestHeaders(reqCtx *ExtProcRequestContext, endOfStream bool) error {
 	return nil
 }
 
-func (tsh *testServerHandler) HandleRequest(ctx context.Context, reqCtx *ExtProcRequestContext) error {
+func (dsh *dummyServerHandler) HandleRequest(ctx context.Context, reqCtx *ExtProcRequestContext) error {
 	return nil
 }
 
-func (tsh *testServerHandler) HandleResponseReceived(ctx context.Context, reqCtx *ExtProcRequestContext) error {
+func (dsh *dummyServerHandler) HandleResponseReceived(ctx context.Context, reqCtx *ExtProcRequestContext) error {
 	return nil
 }
 
-func (tsh *testServerHandler) HandleResponseBody(ctx context.Context, reqCtx *ExtProcRequestContext, responseBytes []byte) error {
+func (dsh *dummyServerHandler) HandleResponseBody(ctx context.Context, reqCtx *ExtProcRequestContext, responseBytes []byte) error {
 	return nil
 }
 
-func (tsh *testServerHandler) HandleResponseBodyModelStreaming(ctx context.Context, reqCtx *ExtProcRequestContext, responseBytes []byte, endOfStream bool) {
+func (dsh *dummyServerHandler) HandleResponseBodyModelStreaming(ctx context.Context, reqCtx *ExtProcRequestContext, responseBytes []byte, endOfStream bool) {
 }
 
-func (tsh *testServerHandler) ResponseSent(reqCtx *ExtProcRequestContext) {}
+func (dsh *dummyServerHandler) ResponseSent(reqCtx *ExtProcRequestContext) {}
 
-func (tsh *testServerHandler) RequestEnded(err error, reqCtx *ExtProcRequestContext) {}
+func (dsh *dummyServerHandler) RequestEnded(err error, reqCtx *ExtProcRequestContext) {}
 
-func (tsh *testServerHandler) SetLogger(logger logr.Logger) {}
+func (dsh *dummyServerHandler) SetLogger(logger logr.Logger) {}
