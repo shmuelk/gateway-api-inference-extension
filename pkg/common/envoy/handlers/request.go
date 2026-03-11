@@ -27,14 +27,15 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 	"google.golang.org/protobuf/types/known/structpb"
 
-	"sigs.k8s.io/gateway-api-inference-extension/pkg/common"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/util/request"
 )
 
-func (s *Server) generateRequestBodyResponses(requestBodyBytes []byte) []*extProcPb.ProcessingResponse {
-	commonResponses := common.BuildChunkedBodyResponses(requestBodyBytes, true)
-	responses := make([]*extProcPb.ProcessingResponse, len(commonResponses))
-	for index, commonResp := range commonResponses {
+// GenerateRequestBodyResponses splits the request body bytes into chunked body
+// responses and wraps each chunk in a ProcessingResponse_RequestBody envelope.
+func GenerateRequestBodyResponses(requestBodyBytes []byte) []*extProcPb.ProcessingResponse {
+	commonResponses := BuildChunkedBodyResponses(requestBodyBytes, true)
+	responses := make([]*extProcPb.ProcessingResponse, 0, len(commonResponses))
+	for _, commonResp := range commonResponses {
 		resp := &extProcPb.ProcessingResponse{
 			Response: &extProcPb.ProcessingResponse_RequestBody{
 				RequestBody: &extProcPb.BodyResponse{
@@ -42,7 +43,7 @@ func (s *Server) generateRequestBodyResponses(requestBodyBytes []byte) []*extPro
 				},
 			},
 		}
-		responses[index] = resp
+		responses = append(responses, resp)
 	}
 	return responses
 }

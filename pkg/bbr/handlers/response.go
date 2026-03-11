@@ -28,7 +28,7 @@ import (
 
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/bbr/framework"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/bbr/metrics"
-	envoy "sigs.k8s.io/gateway-api-inference-extension/pkg/common/envoy"
+	reqenvoy "sigs.k8s.io/gateway-api-inference-extension/pkg/common/envoy/request"
 	logutil "sigs.k8s.io/gateway-api-inference-extension/pkg/common/observability/logging"
 )
 
@@ -37,7 +37,7 @@ import (
 func (s *Server) HandleResponseHeaders(reqCtx *RequestContext, headers *eppb.HttpHeaders) ([]*eppb.ProcessingResponse, error) {
 	if headers != nil && headers.Headers != nil {
 		for _, header := range headers.Headers.Headers {
-			reqCtx.Response.Headers[header.Key] = envoy.GetHeaderValue(header)
+			reqCtx.Response.Headers[header.Key] = reqenvoy.GetHeaderValue(header)
 		}
 	}
 

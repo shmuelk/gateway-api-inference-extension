@@ -214,7 +214,7 @@ func (s *Server) Process(srv extProcPb.ExternalProcessor_ProcessServer) error {
 
 				// Update RequestSize to match marshalled body for Content-Length header.
 				reqCtx.reqHeaderResp = s.generateRequestHeaderResponse(ctx, reqCtx, reqCtx.RequestSize)
-				reqCtx.reqBodyResp = s.generateRequestBodyResponses(reqCtx.Request.RawBody)
+				reqCtx.reqBodyResp = GenerateRequestBodyResponses(reqCtx.Request.RawBody)
 			}
 
 		case *extProcPb.ProcessingRequest_RequestTrailers:
