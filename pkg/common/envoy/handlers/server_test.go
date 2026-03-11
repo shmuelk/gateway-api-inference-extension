@@ -40,25 +40,25 @@ func TestServer(t *testing.T) {
 	testListener, errChan := utils.SetupTestProcessServer(t, ctx, nil, server)
 
 	// test with request ID header sent and non-streaming response
-	serverHandler = testServerHandler{}
+	serverHandler = &testServerHandler{returnError: returnNoError}
 	testServerHelper(ctx, t, true, false)
 
 	// test with request ID header generated and non-streaming response
-	serverHandler = testServerHandler{}
+	serverHandler = &testServerHandler{returnError: returnNoError}
 	testServerHelper(ctx, t, false, false)
 
 	// test with request ID header generated and streaming response
-	serverHandler = testServerHandler{}
+	serverHandler = &testServerHandler{returnError: returnNoError}
 	testServerHelper(ctx, t, false, true)
 
 	// test with a simple error returned by the ServerHandler's HandleRequestHeaders function
 	// request ID header generated and non-streaming response
-	serverHandler = testServerHandler{returnError: returnSimpleError}
+	serverHandler = &testServerHandler{returnError: returnSimpleError}
 	testServerHelper(ctx, t, false, false)
 
 	// test with a BadRequest error returned by the ServerHandler's HandleRequestHeaders function
 	// request ID header generated and non-streaming response
-	serverHandler = testServerHandler{returnError: returnBadRequest}
+	serverHandler = &testServerHandler{returnError: returnBadRequest}
 	testServerHelper(ctx, t, false, false)
 
 	cancel()
@@ -162,14 +162,11 @@ func testServerHelper(ctx context.Context, t *testing.T, addRequestID bool, stre
 	responseReqBody, err := process.Recv()
 	if err != nil {
 		t.Error("Error receiving response", err)
-	} else {
-		if responseReqBody == nil || responseReqBody.GetRequestBody() == nil ||
-			responseReqBody.GetRequestBody().Response == nil ||
-			responseReqBody.GetRequestBody().Response.BodyMutation == nil ||
-			responseReqBody.GetRequestBody().Response.BodyMutation.GetStreamedResponse() == nil {
-			t.Error("Invalid request body response")
-		} else {
-		}
+	} else if responseReqBody == nil || responseReqBody.GetRequestBody() == nil ||
+		responseReqBody.GetRequestBody().Response == nil ||
+		responseReqBody.GetRequestBody().Response.BodyMutation == nil ||
+		responseReqBody.GetRequestBody().Response.BodyMutation.GetStreamedResponse() == nil {
+		t.Error("Invalid request body response")
 	}
 
 	// Send response headers
@@ -252,12 +249,12 @@ func testServerHelper(ctx context.Context, t *testing.T, addRequestID bool, stre
 	}
 }
 
-var serverHandler testServerHandler
+var serverHandler *testServerHandler
 
 type testServerHandlerFactory struct{}
 
 func (tshf *testServerHandlerFactory) CreateHandler(logger logr.Logger) Handler {
-	return &serverHandler
+	return serverHandler
 }
 
 const (
@@ -287,32 +284,29 @@ func (tsh *testServerHandler) HandleRequestHeaders(reqCtx *ExtProcRequestContext
 }
 
 func (tsh *testServerHandler) HandleRequest(ctx context.Context, reqCtx *ExtProcRequestContext) error {
-	tsh.reqCtx = reqCtx
 	tsh.handleRequestCalled = true
 	return nil
 }
 
 func (tsh *testServerHandler) HandleResponseReceived(ctx context.Context, reqCtx *ExtProcRequestContext) error {
-	tsh.reqCtx = reqCtx
 	tsh.handleResponseReceivedCalled = true
 	return nil
 }
 
 func (tsh *testServerHandler) HandleResponseBody(ctx context.Context, reqCtx *ExtProcRequestContext, responseBytes []byte) error {
-	tsh.reqCtx = reqCtx
 	return nil
 }
 
 func (tsh *testServerHandler) HandleResponseBodyModelStreaming(ctx context.Context, reqCtx *ExtProcRequestContext, responseBytes []byte, endOfStream bool) {
-	tsh.reqCtx = reqCtx
+}
+
+func (tsh *testServerHandler) HandleResponseBodyModelStreamingComplete(ctx context.Context, reqCtx *ExtProcRequestContext) {
 }
 
 func (tsh *testServerHandler) ResponseSent(reqCtx *ExtProcRequestContext) {
-	tsh.reqCtx = reqCtx
 }
 
 func (tsh *testServerHandler) RequestEnded(err error, reqCtx *ExtProcRequestContext) {
-	tsh.reqCtx = reqCtx
 }
 
 func (tsh *testServerHandler) SetLogger(logger logr.Logger) {}

@@ -187,6 +187,9 @@ func (dsh *dummyServerHandler) HandleResponseBody(ctx context.Context, reqCtx *E
 func (dsh *dummyServerHandler) HandleResponseBodyModelStreaming(ctx context.Context, reqCtx *ExtProcRequestContext, responseBytes []byte, endOfStream bool) {
 }
 
+func (dsh *dummyServerHandler) HandleResponseBodyModelStreamingComplete(ctx context.Context, reqCtx *ExtProcRequestContext) {
+}
+
 func (dsh *dummyServerHandler) ResponseSent(reqCtx *ExtProcRequestContext) {}
 
 func (dsh *dummyServerHandler) RequestEnded(err error, reqCtx *ExtProcRequestContext) {}
