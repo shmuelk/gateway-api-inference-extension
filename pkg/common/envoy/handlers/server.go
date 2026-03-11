@@ -258,21 +258,6 @@ func (s *Server) Process(srv extProcPb.ExternalProcessor_ProcessServer) error {
 				err = s.finishResponse(ctx, reqCtx, body)
 			}
 
-			if reqCtx.modelServerStreaming {
-			} else {
-				body = append(body, v.ResponseBody.Body...)
-
-				// Message is buffered, we can read and decode.
-				if v.ResponseBody.EndOfStream {
-					reqCtx.ResponseSize = len(body)
-					reqCtx.respBodyResp = generateResponseBodyResponses(body, true)
-					responseErr := reqCtx.handler.HandleResponseBody(ctx, reqCtx, body)
-					if responseErr != nil {
-						break
-					}
-				}
-			}
-
 		case *extProcPb.ProcessingRequest_ResponseTrailers:
 			// For HTTP, the response trailer is not sent. Thus, this case will not be triggered.
 			// For gRPC(over HTTP2), the protocol relies on responseTrialers to determine whether a response is complete.
