@@ -85,6 +85,7 @@ func TestGenerateHeaders_Sanitization(t *testing.T) {
 	targetEndpoint := "1.2.3.4:8080"
 	requestSize := 123
 	reqCtx := &ExtProcRequestContext{
+		handler: &dummyServerHandler{},
 		Request: &Request{
 			Headers: map[string]string{
 				"x-user-data":                   "important",              // should passthrough
@@ -193,5 +194,9 @@ func (dsh *dummyServerHandler) HandleResponseBodyModelStreamingComplete(ctx cont
 func (dsh *dummyServerHandler) ResponseSent(reqCtx *ExtProcRequestContext) {}
 
 func (dsh *dummyServerHandler) RequestEnded(err error, reqCtx *ExtProcRequestContext) {}
+
+func (dsh *dummyServerHandler) IsSystemOwnedHeader(key string) bool {
+	return key == metadata.ObjectiveKey || key == metadata.DestinationEndpointKey
+}
 
 func (dsh *dummyServerHandler) SetLogger(logger logr.Logger) {}

@@ -309,6 +309,10 @@ func (tsh *testServerHandler) ResponseSent(reqCtx *ExtProcRequestContext) {
 func (tsh *testServerHandler) RequestEnded(err error, reqCtx *ExtProcRequestContext) {
 }
 
+func (tsh *testServerHandler) IsSystemOwnedHeader(key string) bool {
+	return false
+}
+
 func (tsh *testServerHandler) SetLogger(logger logr.Logger) {}
 
 func (tsh *testServerHandler) reset() {
