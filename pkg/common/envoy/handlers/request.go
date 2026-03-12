@@ -26,8 +26,6 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 	"google.golang.org/protobuf/types/known/structpb"
-
-	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/util/request"
 )
 
 // GenerateRequestBodyResponses splits the request body bytes into chunked body
@@ -112,7 +110,7 @@ func (s *Server) generateHeaders(ctx context.Context, reqCtx *ExtProcRequestCont
 
 	// Include any non-system-owned headers.
 	for key, value := range reqCtx.Request.Headers {
-		if request.IsSystemOwnedHeader(key) {
+		if reqCtx.handler.IsSystemOwnedHeader(key) {
 			continue
 		}
 		headers = append(headers, &configPb.HeaderValueOption{

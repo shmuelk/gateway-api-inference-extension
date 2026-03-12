@@ -48,6 +48,7 @@ type Handler interface {
 	HandleResponseBodyModelStreamingComplete(ctx context.Context, reqCtx *ExtProcRequestContext)
 	ResponseSent(reqCtx *ExtProcRequestContext)
 	RequestEnded(err error, reqCtx *ExtProcRequestContext)
+	IsSystemOwnedHeader(key string) bool
 	SetLogger(logger logr.Logger)
 }
 

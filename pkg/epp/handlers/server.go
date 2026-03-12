@@ -31,6 +31,7 @@ import (
 	schedulingtypes "sigs.k8s.io/gateway-api-inference-extension/pkg/epp/framework/interface/scheduling"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/metadata"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/metrics"
+	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/util/request"
 )
 
 type Director interface {
@@ -202,6 +203,10 @@ func (sh *ServerHandler) RequestEnded(err error, reqCtx *envoyhandlers.ExtProcRe
 			sh.logger.Error(err, "error in HandleResponseBodyComplete")
 		}
 	}
+}
+
+func (sh *ServerHandler) IsSystemOwnedHeader(key string) bool {
+	return request.IsSystemOwnedHeader(key)
 }
 
 func (sh *ServerHandler) SetLogger(logger logr.Logger) {
