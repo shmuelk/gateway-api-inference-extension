@@ -44,11 +44,11 @@ func TestServer(t *testing.T) {
 	testServerHelper(ctx, t, true, false)
 
 	// test with request ID header generated and non-streaming response
-	serverHandler = &testServerHandler{returnError: returnNoError}
+	serverHandler.reset()
 	testServerHelper(ctx, t, false, false)
 
 	// test with request ID header generated and streaming response
-	serverHandler = &testServerHandler{returnError: returnNoError}
+	serverHandler.reset()
 	testServerHelper(ctx, t, false, true)
 
 	// test with a simple error returned by the ServerHandler's HandleRequestHeaders function
@@ -310,3 +310,11 @@ func (tsh *testServerHandler) RequestEnded(err error, reqCtx *ExtProcRequestCont
 }
 
 func (tsh *testServerHandler) SetLogger(logger logr.Logger) {}
+
+func (tsh *testServerHandler) reset() {
+	tsh.returnError = returnNoError
+	tsh.handleRequestCalled = false
+	tsh.handleRequestHeadersCalled = false
+	tsh.handleResponseReceivedCalled = false
+	tsh.reqCtx = nil
+}
