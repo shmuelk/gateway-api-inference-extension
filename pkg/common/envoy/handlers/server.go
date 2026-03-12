@@ -34,7 +34,6 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	envoyhandlers "sigs.k8s.io/gateway-api-inference-extension/pkg/common/envoy/handlers"
 	reqenvoy "sigs.k8s.io/gateway-api-inference-extension/pkg/common/envoy/request"
 	errcommon "sigs.k8s.io/gateway-api-inference-extension/pkg/common/error"
 	logutil "sigs.k8s.io/gateway-api-inference-extension/pkg/common/observability/logging"
@@ -249,7 +248,7 @@ func (s *Server) Process(srv extProcPb.ExternalProcessor_ProcessServer) error {
 				}
 
 				reqCtx.reqHeaderResp = s.generateRequestHeaderResponse(ctx, reqCtx)
-				reqCtx.reqBodyResp = envoyhandlers.GenerateRequestBodyResponses(reqCtx.Request.RawBody)
+				reqCtx.reqBodyResp = GenerateRequestBodyResponses(reqCtx.Request.RawBody)
 
 				metrics.RecordRequestCounter(reqCtx.IncomingModelName, reqCtx.TargetModelName)
 				metrics.RecordRequestSizes(reqCtx.IncomingModelName, reqCtx.TargetModelName, reqCtx.RequestSize)
@@ -286,7 +285,7 @@ func (s *Server) Process(srv extProcPb.ExternalProcessor_ProcessServer) error {
 
 			if reqCtx.modelServerStreaming {
 				s.HandleResponseBodyModelStreaming(ctx, reqCtx, chunk, endOfStream)
-				reqCtx.respBodyResp = envoyhandlers.GenerateResponseBodyResponses(chunk, endOfStream)
+				reqCtx.respBodyResp = GenerateResponseBodyResponses(chunk, endOfStream)
 			} else {
 				body = append(body, chunk...)
 			}
@@ -353,7 +352,7 @@ func (s *Server) finishResponse(ctx context.Context, reqCtx *RequestContext, bod
 		metrics.RecordResponseSizes(reqCtx.IncomingModelName, reqCtx.TargetModelName, reqCtx.ResponseSize)
 		metrics.RecordNormalizedTimePerOutputToken(ctx, reqCtx.IncomingModelName, reqCtx.TargetModelName, reqCtx.RequestReceivedTimestamp, reqCtx.ResponseCompleteTimestamp, reqCtx.Usage.CompletionTokens)
 	} else {
-		reqCtx.respBodyResp = envoyhandlers.GenerateResponseBodyResponses(body, true)
+		reqCtx.respBodyResp = GenerateResponseBodyResponses(body, true)
 		if _, err := s.HandleResponseBody(ctx, reqCtx, body); err != nil {
 			return err
 		}
