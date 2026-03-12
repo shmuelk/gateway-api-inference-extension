@@ -48,8 +48,8 @@ import (
 	"sigs.k8s.io/gateway-api-inference-extension/version"
 )
 
-func NewStreamingServer(datastore Datastore, director Director, parser fwkrh.Parser) *StreamingServer {
-	return &StreamingServer{
+func NewServer(datastore Datastore, director Director, parser fwkrh.Parser) *Server {
+	return &Server{
 		director:  director,
 		datastore: datastore,
 		parser:    parser,
@@ -70,7 +70,7 @@ type Datastore interface {
 
 // Server implements the Envoy external processing server.
 // https://www.envoyproxy.io/docs/envoy/latest/api-v3/service/ext_proc/v3/external_processor.proto
-type StreamingServer struct {
+type Server struct {
 	datastore Datastore
 	director  Director
 	parser    fwkrh.Parser
@@ -136,7 +136,7 @@ const (
 	TrailerResponseResponsesComplete StreamRequestState = 7
 )
 
-func (s *StreamingServer) Process(srv extProcPb.ExternalProcessor_ProcessServer) error {
+func (s *Server) Process(srv extProcPb.ExternalProcessor_ProcessServer) error {
 	ctx := srv.Context()
 
 	// Start tracing span for the request
@@ -334,7 +334,7 @@ func (s *StreamingServer) Process(srv extProcPb.ExternalProcessor_ProcessServer)
 
 // finishResponse ensures all post-response logic, such as metric recording
 // and state updates, is executed exactly once for the request lifecycle.
-func (s *StreamingServer) finishResponse(ctx context.Context, reqCtx *RequestContext, body []byte) error {
+func (s *Server) finishResponse(ctx context.Context, reqCtx *RequestContext, body []byte) error {
 	// Return early if the response has already been finished to prevent
 	// duplicate execution of side effects and metrics.
 	if reqCtx.ResponseComplete {
