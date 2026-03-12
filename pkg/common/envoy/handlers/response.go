@@ -90,3 +90,20 @@ func generateResponseHeaders(reqCtx *ExtProcRequestContext) []*configPb.HeaderVa
 	}
 	return headers
 }
+
+// AddStreamedResponseBody splits responseBodyBytes into chunked body responses
+// and appends them as ResponseBody ProcessingResponses, mirroring
+// GenerateRequestBodyResponses for the request path.
+func AddStreamedResponseBody(responses []*extProcPb.ProcessingResponse, responseBodyBytes []byte) []*extProcPb.ProcessingResponse {
+	commonResponses := BuildChunkedBodyResponses(responseBodyBytes, true)
+	for _, commonResp := range commonResponses {
+		responses = append(responses, &extProcPb.ProcessingResponse{
+			Response: &extProcPb.ProcessingResponse_ResponseBody{
+				ResponseBody: &extProcPb.BodyResponse{
+					Response: commonResp,
+				},
+			},
+		})
+	}
+	return responses
+}
