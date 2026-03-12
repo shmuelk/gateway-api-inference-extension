@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	envoyhandlers "sigs.k8s.io/gateway-api-inference-extension/pkg/common/envoy/handlers"
 	errcommon "sigs.k8s.io/gateway-api-inference-extension/pkg/common/error"
 	logutil "sigs.k8s.io/gateway-api-inference-extension/pkg/common/observability/logging"
 	backendmetrics "sigs.k8s.io/gateway-api-inference-extension/pkg/epp/backend/metrics"
@@ -31,7 +32,6 @@ import (
 	fctypes "sigs.k8s.io/gateway-api-inference-extension/pkg/epp/flowcontrol/types"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/framework/interface/flowcontrol"
 	schedulingtypes "sigs.k8s.io/gateway-api-inference-extension/pkg/epp/framework/interface/scheduling"
-	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/handlers"
 )
 
 // --- Mocks ---
@@ -55,9 +55,9 @@ func (m *mockFlowController) EnqueueAndWait(
 func TestLegacyAdmissionController_Admit(t *testing.T) {
 	t.Parallel()
 	ctx := logutil.NewTestLoggerIntoContext(context.Background())
-	reqCtx := &handlers.RequestContext{
+	reqCtx := &envoyhandlers.RequestContext{
 		SchedulingRequest: &schedulingtypes.LLMRequest{RequestId: "test-req"},
-		Request: &handlers.Request{
+		Request: &envoyhandlers.Request{
 			Metadata: map[string]any{},
 		},
 	}
@@ -181,9 +181,9 @@ func TestFlowControlRequestAdapter(t *testing.T) {
 func TestFlowControlAdmissionController_Admit(t *testing.T) {
 	t.Parallel()
 	ctx := logutil.NewTestLoggerIntoContext(context.Background())
-	reqCtx := &handlers.RequestContext{
+	reqCtx := &envoyhandlers.RequestContext{
 		SchedulingRequest: &schedulingtypes.LLMRequest{RequestId: "test-req"},
-		Request: &handlers.Request{
+		Request: &envoyhandlers.Request{
 			Metadata: map[string]any{},
 		},
 	}

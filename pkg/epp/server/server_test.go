@@ -27,9 +27,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"sigs.k8s.io/gateway-api-inference-extension/apix/v1alpha2"
+	envoyhandlers "sigs.k8s.io/gateway-api-inference-extension/pkg/common/envoy/handlers"
 	fwkdl "sigs.k8s.io/gateway-api-inference-extension/pkg/epp/framework/interface/datalayer"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/framework/plugins/requesthandling/parsers/openai"
-	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/handlers"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/metadata"
 	testutil "sigs.k8s.io/gateway-api-inference-extension/pkg/epp/util/testing"
 	"sigs.k8s.io/gateway-api-inference-extension/test/utils"
@@ -91,7 +91,7 @@ func runStreamingTest(t *testing.T, streamingResponse bool, hasTrailers bool) {
 	director := &testDirector{}
 	ctx, cancel, ds, _ := utils.PrepareForTestExtProcServer([]*v1alpha2.InferenceObjective{model},
 		[]*v1.Pod{{ObjectMeta: metav1.ObjectMeta{Name: podName}}}, "test-pool1", namespace, poolPort)
-	extProcServer := handlers.NewServer(ds, director, openai.NewOpenAIParser())
+	extProcServer := envoyhandlers.NewServer(ds, director, openai.NewOpenAIParser())
 
 	testListener, errChan := utils.SetupTestExtProcServer(t, ctx, ds, extProcServer)
 	process, conn := utils.GetExtProcServerClient(ctx, t)
@@ -298,7 +298,7 @@ type testDirector struct {
 	requestHeaders map[string]string
 }
 
-func (ts *testDirector) HandleRequest(ctx context.Context, reqCtx *handlers.RequestContext) (*handlers.RequestContext, error) {
+func (ts *testDirector) HandleRequest(ctx context.Context, reqCtx *envoyhandlers.RequestContext) (*envoyhandlers.RequestContext, error) {
 	ts.requestHeaders = reqCtx.Request.Headers
 
 	bodyMap := make(map[string]any)
@@ -317,15 +317,15 @@ func (ts *testDirector) HandleRequest(ctx context.Context, reqCtx *handlers.Requ
 	return reqCtx, nil
 }
 
-func (ts *testDirector) HandleResponseReceived(ctx context.Context, reqCtx *handlers.RequestContext) (*handlers.RequestContext, error) {
+func (ts *testDirector) HandleResponseReceived(ctx context.Context, reqCtx *envoyhandlers.RequestContext) (*envoyhandlers.RequestContext, error) {
 	return reqCtx, nil
 }
 
-func (ts *testDirector) HandleResponseBodyStreaming(ctx context.Context, reqCtx *handlers.RequestContext) (*handlers.RequestContext, error) {
+func (ts *testDirector) HandleResponseBodyStreaming(ctx context.Context, reqCtx *envoyhandlers.RequestContext) (*envoyhandlers.RequestContext, error) {
 	return reqCtx, nil
 }
 
-func (ts *testDirector) HandleResponseBodyComplete(ctx context.Context, reqCtx *handlers.RequestContext) (*handlers.RequestContext, error) {
+func (ts *testDirector) HandleResponseBodyComplete(ctx context.Context, reqCtx *envoyhandlers.RequestContext) (*envoyhandlers.RequestContext, error) {
 	return reqCtx, nil
 }
 

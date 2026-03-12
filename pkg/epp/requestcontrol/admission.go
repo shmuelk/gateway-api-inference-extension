@@ -23,13 +23,13 @@ import (
 	"github.com/go-logr/logr"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
+	envoyhandlers "sigs.k8s.io/gateway-api-inference-extension/pkg/common/envoy/handlers"
 	errcommon "sigs.k8s.io/gateway-api-inference-extension/pkg/common/error"
 	logutil "sigs.k8s.io/gateway-api-inference-extension/pkg/common/observability/logging"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/flowcontrol/contracts"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/flowcontrol/types"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/framework/interface/flowcontrol"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/framework/interface/scheduling"
-	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/handlers"
 	requtil "sigs.k8s.io/gateway-api-inference-extension/pkg/epp/util/request"
 )
 
@@ -50,7 +50,7 @@ type AdmissionController interface {
 	//   - errcommon.Error: If the request is rejected.
 	Admit(
 		ctx context.Context,
-		reqCtx *handlers.RequestContext,
+		reqCtx *envoyhandlers.RequestContext,
 		priority int,
 	) error
 }
@@ -66,7 +66,7 @@ func rejectIfSheddableAndSaturated(
 	ctx context.Context,
 	sd contracts.SaturationDetector,
 	locator contracts.PodLocator,
-	reqCtx *handlers.RequestContext,
+	reqCtx *envoyhandlers.RequestContext,
 	priority int,
 	logger logr.Logger,
 ) error {
@@ -108,7 +108,7 @@ func NewLegacyAdmissionController(
 // It checks for saturation only for requests with priority < 0.
 func (lac *LegacyAdmissionController) Admit(
 	ctx context.Context,
-	reqCtx *handlers.RequestContext,
+	reqCtx *envoyhandlers.RequestContext,
 	priority int,
 ) error {
 	logger := log.FromContext(ctx)
@@ -148,7 +148,7 @@ func NewFlowControlAdmissionController(fc flowController, poolName string) *Flow
 // deferring to the Flow Control system.
 func (fcac *FlowControlAdmissionController) Admit(
 	ctx context.Context,
-	reqCtx *handlers.RequestContext,
+	reqCtx *envoyhandlers.RequestContext,
 	priority int,
 ) error {
 	logger := log.FromContext(ctx)

@@ -31,6 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"sigs.k8s.io/gateway-api-inference-extension/apix/v1alpha2"
+	envoyhandlers "sigs.k8s.io/gateway-api-inference-extension/pkg/common/envoy/handlers"
 	errcommon "sigs.k8s.io/gateway-api-inference-extension/pkg/common/error"
 	logutil "sigs.k8s.io/gateway-api-inference-extension/pkg/common/observability/logging"
 	reqcommon "sigs.k8s.io/gateway-api-inference-extension/pkg/common/request"
@@ -42,7 +43,6 @@ import (
 	fwk "sigs.k8s.io/gateway-api-inference-extension/pkg/epp/framework/interface/requestcontrol"
 	fwkrh "sigs.k8s.io/gateway-api-inference-extension/pkg/epp/framework/interface/requesthandling"
 	fwksched "sigs.k8s.io/gateway-api-inference-extension/pkg/epp/framework/interface/scheduling"
-	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/handlers"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/metrics"
 )
 
@@ -110,7 +110,7 @@ type Director struct {
 }
 
 // getInferenceObjective fetches the inferenceObjective from the datastore otherwise creates a new one based on reqCtx.
-func (d *Director) getInferenceObjective(ctx context.Context, reqCtx *handlers.RequestContext) *v1alpha2.InferenceObjective {
+func (d *Director) getInferenceObjective(ctx context.Context, reqCtx *envoyhandlers.RequestContext) *v1alpha2.InferenceObjective {
 	infObjective := d.datastore.ObjectiveGet(reqCtx.ObjectiveKey)
 	if infObjective == nil {
 		log.FromContext(ctx).V(logutil.VERBOSE).Info("No associated InferenceObjective found, using default", "objectiveKey", reqCtx.ObjectiveKey)
@@ -128,7 +128,7 @@ func (d *Director) getInferenceObjective(ctx context.Context, reqCtx *handlers.R
 
 // HandleRequest orchestrates the request lifecycle.
 // It always returns the requestContext even in the error case, as the request context is used in error handling.
-func (d *Director) HandleRequest(ctx context.Context, reqCtx *handlers.RequestContext) (*handlers.RequestContext, error) {
+func (d *Director) HandleRequest(ctx context.Context, reqCtx *envoyhandlers.RequestContext) (*envoyhandlers.RequestContext, error) {
 	logger := log.FromContext(ctx)
 
 	// Parse, mutate, and extract the request body
@@ -194,7 +194,7 @@ func (d *Director) HandleRequest(ctx context.Context, reqCtx *handlers.RequestCo
 	return reqCtx, nil
 }
 
-func (d *Director) processRequestBody(ctx context.Context, reqCtx *handlers.RequestContext, parser fwkrh.Parser) (*fwksched.LLMRequestBody, error) {
+func (d *Director) processRequestBody(ctx context.Context, reqCtx *envoyhandlers.RequestContext, parser fwkrh.Parser) (*fwksched.LLMRequestBody, error) {
 	llmRequestBody, err := parser.ParseRequest(ctx, reqCtx.Request.RawBody, reqCtx.Request.Headers)
 	if err != nil {
 		return nil, errcommon.Error{Code: errcommon.BadRequest, Msg: err.Error()}
@@ -214,7 +214,7 @@ func (d *Director) processRequestBody(ctx context.Context, reqCtx *handlers.Requ
 	return llmRequestBody, nil
 }
 
-func (d *Director) mutateAndRepackage(ctx context.Context, reqCtx *handlers.RequestContext, bodyMap map[string]any) error {
+func (d *Director) mutateAndRepackage(ctx context.Context, reqCtx *envoyhandlers.RequestContext, bodyMap map[string]any) error {
 	logger := log.FromContext(ctx)
 
 	// Mutate the model name inside the map
@@ -236,7 +236,7 @@ func (d *Director) mutateAndRepackage(ctx context.Context, reqCtx *handlers.Requ
 	return nil
 }
 
-func (d *Director) mutateModel(reqCtx *handlers.RequestContext, bodyMap map[string]any) (*handlers.RequestContext, error) {
+func (d *Director) mutateModel(reqCtx *envoyhandlers.RequestContext, bodyMap map[string]any) (*envoyhandlers.RequestContext, error) {
 	var ok bool
 	reqCtx.IncomingModelName, ok = bodyMap["model"].(string)
 	if !ok {
@@ -251,7 +251,7 @@ func (d *Director) mutateModel(reqCtx *handlers.RequestContext, bodyMap map[stri
 	return reqCtx, nil
 }
 
-func (d *Director) applyWeightedModelRewrite(reqCtx *handlers.RequestContext) {
+func (d *Director) applyWeightedModelRewrite(reqCtx *envoyhandlers.RequestContext) {
 	rewriteRule, modelRewriteName := d.datastore.ModelRewriteGet(reqCtx.IncomingModelName)
 	if rewriteRule == nil {
 		return
@@ -290,7 +290,7 @@ func (d *Director) selectWeightedModel(models []v1alpha2.TargetModel) string {
 
 // prepareRequest populates the RequestContext and calls the registered PreRequest plugins
 // for allowing plugging customized logic based on the scheduling result.
-func (d *Director) prepareRequest(ctx context.Context, reqCtx *handlers.RequestContext, result *fwksched.SchedulingResult) (*handlers.RequestContext, error) {
+func (d *Director) prepareRequest(ctx context.Context, reqCtx *envoyhandlers.RequestContext, result *fwksched.SchedulingResult) (*envoyhandlers.RequestContext, error) {
 	logger := log.FromContext(ctx)
 	if result == nil || len(result.ProfileResults) == 0 {
 		return reqCtx, errcommon.Error{Code: errcommon.Internal, Msg: "results must be greater than zero"}
@@ -327,7 +327,7 @@ func (d *Director) toSchedulerPodMetrics(pods []backendmetrics.PodMetrics) []fwk
 }
 
 // HandleResponseReceived is called when the response headers are received.
-func (d *Director) HandleResponseReceived(ctx context.Context, reqCtx *handlers.RequestContext) (*handlers.RequestContext, error) {
+func (d *Director) HandleResponseReceived(ctx context.Context, reqCtx *envoyhandlers.RequestContext) (*envoyhandlers.RequestContext, error) {
 	response := &fwk.Response{
 		RequestId:   reqCtx.Request.Headers[reqcommon.RequestIdHeaderKey],
 		Headers:     reqCtx.Response.Headers,
@@ -341,7 +341,7 @@ func (d *Director) HandleResponseReceived(ctx context.Context, reqCtx *handlers.
 }
 
 // HandleResponseBodyStreaming is called every time a chunk of the response body is received.
-func (d *Director) HandleResponseBodyStreaming(ctx context.Context, reqCtx *handlers.RequestContext) (*handlers.RequestContext, error) {
+func (d *Director) HandleResponseBodyStreaming(ctx context.Context, reqCtx *envoyhandlers.RequestContext) (*envoyhandlers.RequestContext, error) {
 	logger := log.FromContext(ctx).WithValues("stage", "bodyChunk")
 	logger.V(logutil.TRACE).Info("Entering HandleResponseBodyChunk")
 	response := &fwk.Response{
@@ -356,7 +356,7 @@ func (d *Director) HandleResponseBodyStreaming(ctx context.Context, reqCtx *hand
 }
 
 // HandleResponseBodyComplete is called when the response body is fully received.
-func (d *Director) HandleResponseBodyComplete(ctx context.Context, reqCtx *handlers.RequestContext) (*handlers.RequestContext, error) {
+func (d *Director) HandleResponseBodyComplete(ctx context.Context, reqCtx *envoyhandlers.RequestContext) (*envoyhandlers.RequestContext, error) {
 	logger := log.FromContext(ctx).WithValues("stage", "bodyChunk")
 	logger.V(logutil.DEBUG).Info("Entering HandleResponseBodyComplete")
 	response := &fwk.Response{

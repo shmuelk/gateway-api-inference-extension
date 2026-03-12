@@ -38,6 +38,7 @@ import (
 
 	v1 "sigs.k8s.io/gateway-api-inference-extension/api/v1"
 	"sigs.k8s.io/gateway-api-inference-extension/apix/v1alpha2"
+	envoyhandlers "sigs.k8s.io/gateway-api-inference-extension/pkg/common/envoy/handlers"
 	errcommon "sigs.k8s.io/gateway-api-inference-extension/pkg/common/error"
 	logutil "sigs.k8s.io/gateway-api-inference-extension/pkg/common/observability/logging"
 	reqcommon "sigs.k8s.io/gateway-api-inference-extension/pkg/common/request"
@@ -51,7 +52,6 @@ import (
 	fwksched "sigs.k8s.io/gateway-api-inference-extension/pkg/epp/framework/interface/scheduling"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/framework/plugins/datalayer/source/mocks"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/framework/plugins/requesthandling/parsers/openai"
-	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/handlers"
 	poolutil "sigs.k8s.io/gateway-api-inference-extension/pkg/epp/util/pool"
 	testutil "sigs.k8s.io/gateway-api-inference-extension/pkg/epp/util/testing"
 )
@@ -66,7 +66,7 @@ type mockAdmissionController struct {
 	admitErr error
 }
 
-func (m *mockAdmissionController) Admit(context.Context, *handlers.RequestContext, int) error {
+func (m *mockAdmissionController) Admit(context.Context, *envoyhandlers.RequestContext, int) error {
 	return m.admitErr
 }
 
@@ -303,11 +303,11 @@ func TestDirector_HandleRequest(t *testing.T) {
 		schedulerMockSetup      func(m *mockScheduler)
 		initialTargetModelName  string // Initial target model in the reqCtx.
 		parser                  fwkrh.Parser
-		wantErrCode             string                   // Expected errcommon code string
-		wantReqCtx              *handlers.RequestContext // Fields to check in the returned RequestContext
-		wantMutatedBodyModel    string                   // Expected model in reqCtx.Request.Body after PostDispatch
-		targetModelName         string                   // Expected model name after target model resolution
-		admitRequestDenialError error                    // Expected denial error from admission plugin
+		wantErrCode             string                        // Expected errcommon code string
+		wantReqCtx              *envoyhandlers.RequestContext // Fields to check in the returned RequestContext
+		wantMutatedBodyModel    string                        // Expected model in reqCtx.Request.Body after PostDispatch
+		targetModelName         string                        // Expected model name after target model resolution
+		admitRequestDenialError error                         // Expected denial error from admission plugin
 		prepareDataPlugin       *mockPrepareDataPlugin
 	}{
 		{
@@ -321,7 +321,7 @@ func TestDirector_HandleRequest(t *testing.T) {
 				m.scheduleResults = defaultSuccessfulScheduleResults
 			},
 			initialTargetModelName: model,
-			wantReqCtx: &handlers.RequestContext{
+			wantReqCtx: &envoyhandlers.RequestContext{
 				ObjectiveKey:    objectiveName,
 				TargetModelName: model,
 				TargetPod: &fwkdl.EndpointMetadata{
@@ -345,7 +345,7 @@ func TestDirector_HandleRequest(t *testing.T) {
 				m.scheduleResults = defaultSuccessfulScheduleResults
 			},
 			initialTargetModelName: model,
-			wantReqCtx: &handlers.RequestContext{
+			wantReqCtx: &envoyhandlers.RequestContext{
 				ObjectiveKey:    model,
 				TargetModelName: modelRewritten,
 				TargetPod: &fwkdl.EndpointMetadata{
@@ -374,7 +374,7 @@ func TestDirector_HandleRequest(t *testing.T) {
 				m.scheduleResults = defaultSuccessfulScheduleResults
 			},
 			initialTargetModelName: model,
-			wantReqCtx: &handlers.RequestContext{
+			wantReqCtx: &envoyhandlers.RequestContext{
 				TargetModelName: model,
 				TargetPod: &fwkdl.EndpointMetadata{
 					NamespacedName: types.NamespacedName{Namespace: "default", Name: "pod1"},
@@ -403,7 +403,7 @@ func TestDirector_HandleRequest(t *testing.T) {
 				m.scheduleResults = defaultSuccessfulScheduleResults
 				m.dataProduced = true
 			},
-			wantReqCtx: &handlers.RequestContext{
+			wantReqCtx: &envoyhandlers.RequestContext{
 				TargetModelName: model,
 				TargetPod: &fwkdl.EndpointMetadata{
 					NamespacedName: types.NamespacedName{Namespace: "default", Name: "pod1"},
@@ -432,7 +432,7 @@ func TestDirector_HandleRequest(t *testing.T) {
 			schedulerMockSetup: func(m *mockScheduler) {
 				m.scheduleResults = defaultSuccessfulScheduleResults
 			},
-			wantReqCtx: &handlers.RequestContext{
+			wantReqCtx: &envoyhandlers.RequestContext{
 				TargetModelName: model,
 				TargetPod: &fwkdl.EndpointMetadata{
 					NamespacedName: types.NamespacedName{Namespace: "default", Name: "pod1"},
@@ -486,7 +486,7 @@ func TestDirector_HandleRequest(t *testing.T) {
 				m.scheduleResults = defaultSuccessfulScheduleResults
 			},
 			initialTargetModelName: model,
-			wantReqCtx: &handlers.RequestContext{
+			wantReqCtx: &envoyhandlers.RequestContext{
 				ObjectiveKey:    objectiveName,
 				TargetModelName: model,
 				TargetPod: &fwkdl.EndpointMetadata{
@@ -509,7 +509,7 @@ func TestDirector_HandleRequest(t *testing.T) {
 				m.scheduleResults = defaultSuccessfulScheduleResults
 			},
 			initialTargetModelName: "resolved-target-model-A",
-			wantReqCtx: &handlers.RequestContext{
+			wantReqCtx: &envoyhandlers.RequestContext{
 				ObjectiveKey:    objectiveNameResolve,
 				TargetModelName: "resolved-target-model-A",
 				TargetPod: &fwkdl.EndpointMetadata{
@@ -529,7 +529,7 @@ func TestDirector_HandleRequest(t *testing.T) {
 				m.scheduleResults = defaultSuccessfulScheduleResults
 			},
 			initialTargetModelName: "food-review-1",
-			wantReqCtx: &handlers.RequestContext{
+			wantReqCtx: &envoyhandlers.RequestContext{
 				ObjectiveKey:    "food-review-1",
 				TargetModelName: "food-review-1",
 				TargetPod: &fwkdl.EndpointMetadata{
@@ -667,8 +667,8 @@ func TestDirector_HandleRequest(t *testing.T) {
 					director.podLocator = NewCachedPodLocator(context.Background(), NewDatastorePodLocator(mockDs), time.Minute)
 				}
 
-				reqCtx := &handlers.RequestContext{
-					Request: &handlers.Request{
+				reqCtx := &envoyhandlers.RequestContext{
+					Request: &envoyhandlers.Request{
 						Headers: map[string]string{
 							reqcommon.RequestIdHeaderKey: "test-req-id-" + test.name, // Ensure a default request ID
 						},
@@ -971,7 +971,7 @@ func TestDirector_ApplyWeightedModelRewrite(t *testing.T) {
 			locator := NewCachedPodLocator(context.Background(), NewDatastorePodLocator(mockDs), time.Minute)
 			director := NewDirectorWithConfig(mockDs, &mockScheduler{}, &mockAdmissionController{}, nil, locator, NewConfig())
 
-			reqCtx := &handlers.RequestContext{
+			reqCtx := &envoyhandlers.RequestContext{
 				IncomingModelName: test.incomingModel,
 				TargetModelName:   test.initialTarget,
 			}
@@ -1079,13 +1079,13 @@ func TestDirector_HandleResponseReceived(t *testing.T) {
 		NewConfig().WithResponseReceivedPlugins(pr1),
 	)
 
-	reqCtx := &handlers.RequestContext{
-		Request: &handlers.Request{
+	reqCtx := &envoyhandlers.RequestContext{
+		Request: &envoyhandlers.Request{
 			Headers: map[string]string{
 				reqcommon.RequestIdHeaderKey: "test-req-id-for-response",
 			},
 		},
-		Response: &handlers.Response{ // Simulate some response headers
+		Response: &envoyhandlers.Response{ // Simulate some response headers
 			Headers: map[string]string{"X-Test-Response-Header": "TestValue"},
 		},
 
@@ -1117,13 +1117,13 @@ func TestDirector_HandleResponseStreaming(t *testing.T) {
 	locator := NewCachedPodLocator(context.Background(), NewDatastorePodLocator(ds), time.Minute)
 	director := NewDirectorWithConfig(ds, mockSched, nil, nil, locator, NewConfig().WithResponseStreamingPlugins(ps1))
 
-	reqCtx := &handlers.RequestContext{
-		Request: &handlers.Request{
+	reqCtx := &envoyhandlers.RequestContext{
+		Request: &envoyhandlers.Request{
 			Headers: map[string]string{
 				reqcommon.RequestIdHeaderKey: "test-req-id-for-streaming",
 			},
 		},
-		Response: &handlers.Response{
+		Response: &envoyhandlers.Response{
 			Headers: map[string]string{"X-Test-Streaming-Header": "StreamValue"},
 		},
 		TargetPod: &fwkdl.EndpointMetadata{NamespacedName: types.NamespacedName{Namespace: "namespace1", Name: "test-pod-name"}},
@@ -1154,13 +1154,13 @@ func TestDirector_HandleResponseComplete(t *testing.T) {
 	locator := NewCachedPodLocator(context.Background(), NewDatastorePodLocator(ds), time.Minute)
 	director := NewDirectorWithConfig(ds, mockSched, nil, nil, locator, NewConfig().WithResponseCompletePlugins(pc1))
 
-	reqCtx := &handlers.RequestContext{
-		Request: &handlers.Request{
+	reqCtx := &envoyhandlers.RequestContext{
+		Request: &envoyhandlers.Request{
 			Headers: map[string]string{
 				reqcommon.RequestIdHeaderKey: "test-req-id-for-complete",
 			},
 		},
-		Response: &handlers.Response{
+		Response: &envoyhandlers.Response{
 			Headers: map[string]string{"X-Test-Complete-Header": "CompleteValue"},
 		},
 		TargetPod: &fwkdl.EndpointMetadata{NamespacedName: types.NamespacedName{Namespace: "namespace1", Name: "test-pod-name"}},
