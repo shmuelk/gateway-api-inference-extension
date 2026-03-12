@@ -36,3 +36,20 @@ func AddStreamedResponseBody(responses []*extProcPb.ProcessingResponse, response
 	}
 	return responses
 }
+
+// GenerateResponseBodyResponses generate the ResponseBody messages for a response
+func GenerateResponseBodyResponses(responseBodyBytes []byte, setEoS bool) []*extProcPb.ProcessingResponse {
+	commonResponses := BuildChunkedBodyResponses(responseBodyBytes, setEoS)
+	responses := make([]*extProcPb.ProcessingResponse, 0, len(commonResponses))
+	for _, commonResp := range commonResponses {
+		resp := &extProcPb.ProcessingResponse{
+			Response: &extProcPb.ProcessingResponse_ResponseBody{
+				ResponseBody: &extProcPb.BodyResponse{
+					Response: commonResp,
+				},
+			},
+		}
+		responses = append(responses, resp)
+	}
+	return responses
+}

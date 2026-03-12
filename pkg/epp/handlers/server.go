@@ -286,7 +286,7 @@ func (s *StreamingServer) Process(srv extProcPb.ExternalProcessor_ProcessServer)
 
 			if reqCtx.modelServerStreaming {
 				s.HandleResponseBodyModelStreaming(ctx, reqCtx, chunk, endOfStream)
-				reqCtx.respBodyResp = generateResponseBodyResponses(chunk, endOfStream)
+				reqCtx.respBodyResp = envoyhandlers.GenerateResponseBodyResponses(chunk, endOfStream)
 			} else {
 				body = append(body, chunk...)
 			}
@@ -353,7 +353,7 @@ func (s *StreamingServer) finishResponse(ctx context.Context, reqCtx *RequestCon
 		metrics.RecordResponseSizes(reqCtx.IncomingModelName, reqCtx.TargetModelName, reqCtx.ResponseSize)
 		metrics.RecordNormalizedTimePerOutputToken(ctx, reqCtx.IncomingModelName, reqCtx.TargetModelName, reqCtx.RequestReceivedTimestamp, reqCtx.ResponseCompleteTimestamp, reqCtx.Usage.CompletionTokens)
 	} else {
-		reqCtx.respBodyResp = generateResponseBodyResponses(body, true)
+		reqCtx.respBodyResp = envoyhandlers.GenerateResponseBodyResponses(body, true)
 		if _, err := s.HandleResponseBody(ctx, reqCtx, body); err != nil {
 			return err
 		}
