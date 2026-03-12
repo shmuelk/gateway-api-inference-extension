@@ -14,21 +14,21 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package envoy
+package handlers
 
 import (
-	eppb "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+	extProcPb "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 )
 
 // AddStreamedResponseBody splits responseBodyBytes into chunked body responses
 // and appends them as ResponseBody ProcessingResponses, mirroring
 // GenerateRequestBodyResponses for the request path.
-func AddStreamedResponseBody(responses []*eppb.ProcessingResponse, responseBodyBytes []byte) []*eppb.ProcessingResponse {
+func AddStreamedResponseBody(responses []*extProcPb.ProcessingResponse, responseBodyBytes []byte) []*extProcPb.ProcessingResponse {
 	commonResponses := BuildChunkedBodyResponses(responseBodyBytes, true)
 	for _, commonResp := range commonResponses {
-		responses = append(responses, &eppb.ProcessingResponse{
-			Response: &eppb.ProcessingResponse_ResponseBody{
-				ResponseBody: &eppb.BodyResponse{
+		responses = append(responses, &extProcPb.ProcessingResponse{
+			Response: &extProcPb.ProcessingResponse_ResponseBody{
+				ResponseBody: &extProcPb.BodyResponse{
 					Response: commonResp,
 				},
 			},
